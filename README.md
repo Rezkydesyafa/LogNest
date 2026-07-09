@@ -1,0 +1,59 @@
+# LogMind AI
+
+Centralized logging and incident platform for Docker-based applications.
+
+## Phase 1 Scope
+
+This repository currently contains the backend foundation only:
+
+- `apps/api`: NestJS HTTP API with Swagger, Pino logging, global filters, interceptors, PostgreSQL, MongoDB, Redis, and BullMQ wiring.
+- `apps/worker`: NestJS worker process connected to the same databases and BullMQ queue.
+- `packages/shared`: shared constants and infrastructure used by API and worker.
+- `docker-compose.yml`: PostgreSQL, MongoDB, and Redis for local development.
+
+Log ingestion, API keys, auth, incident grouping, AI analysis, SDKs, agent, and dashboard are intentionally left for later phases.
+
+## Setup
+
+```bash
+npm install
+npm run docker:up
+npm run prisma:generate
+npm run dev:api
+npm run dev:worker
+```
+
+On PowerShell, copy the env file with:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+API docs are available at `http://localhost:3000/docs`.
+
+Health check:
+
+```bash
+curl http://localhost:3000/health
+```
+
+## Architecture
+
+PostgreSQL is accessed through Prisma and will hold relational product data in later phases.
+MongoDB is accessed through Mongoose and will hold raw and parsed logs.
+Redis powers BullMQ queues so ingestion requests can stay fast once `/logs/ingest` is added.
+
+Phase 1 keeps the database schema empty except for connectivity. Tables will be added when their features are implemented.
+
+## Trade-offs
+
+The monorepo uses plain npm workspaces and `tsc` instead of Nx or Turborepo. That keeps Phase 1 small and avoids owning orchestration before it is useful.
+
+## Phase 1 Demo Flow
+
+1. Start PostgreSQL, MongoDB, and Redis with `npm run docker:up`.
+2. Start the API with `npm run dev:api`.
+3. Start the worker with `npm run dev:worker`.
+4. Open `/health` to verify PostgreSQL, MongoDB, and Redis connectivity.
+
+Full log ingestion, Docker agent collection, incident detection, AI summaries, and dashboard UI are later phases.
