@@ -76,3 +76,24 @@ Authenticated dashboard endpoints use `Authorization: Bearer <token>`.
 - `DELETE /api-keys/:apiKeyId`
 
 Created API keys return the raw `key` once. Later list calls only return safe metadata: id, name, type, prefix, project id, usage, revocation, and creation timestamps.
+
+## Phase 3 APIs
+
+Server API keys use `x-api-key` and can send `docker`, `api`, `worker`, and `manual` logs:
+
+- `POST /logs/ingest`
+
+Client API keys use `x-api-key` and can only send frontend logs:
+
+- `POST /logs/frontend`
+
+Authenticated dashboard endpoints:
+
+- `GET /projects/:projectId/services`
+- `GET /services/:serviceId`
+- `GET /services/:serviceId/logs`
+- `GET /logs`
+- `GET /logs/search`
+- `GET /logs/:logId`
+
+Log query parameters include `projectId`, `serviceId`, `sourceType`, `level`, `environment`, `keyword`, `from`, `to`, `statusCode`, `path`, `page`, and `limit`.

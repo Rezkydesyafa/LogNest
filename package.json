@@ -15,6 +15,7 @@
     "start:api": "node dist/apps/api/src/main.js",
     "start:worker": "node dist/apps/worker/src/main.js",
     "check:phase2": "tsx scripts/phase2-self-check.ts",
+    "check:phase3": "tsx scripts/phase3-self-check.ts",
     "docker:up": "docker compose up -d postgres mongodb redis",
     "docker:down": "docker compose down",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
