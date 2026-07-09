@@ -154,3 +154,21 @@ app.use(
 ```
 
 Network failures are swallowed so the host app does not crash when LogMind is unavailable. Request bodies are not captured unless `captureRequestBody: true` is set.
+
+## Phase 8 Package
+
+`@logmind/frontend-logger` captures browser errors, unhandled promise rejections, and failed fetch requests, then sends them to `POST /logs/frontend` with a client API key.
+
+```ts
+import { initLogMindFrontend } from '@logmind/frontend-logger';
+
+initLogMindFrontend({
+  apiKey: process.env.NEXT_PUBLIC_LOGMIND_CLIENT_KEY,
+  serviceName: 'frontend-dashboard',
+  environment: 'development',
+  endpoint: 'http://localhost:4000/logs/frontend',
+});
+```
+
+The SDK includes page URL, route, user agent, language, and viewport metadata. Logging failures are swallowed so the frontend app keeps running.
+
