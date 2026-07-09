@@ -64,7 +64,11 @@ export class ApiKeysService {
     return { revoked: true };
   }
 
-  async validateRawKey(rawKey: string): Promise<ApiKeyContext> {
+  async validateRawKey(rawKey?: string): Promise<ApiKeyContext> {
+    if (!rawKey) {
+      throw new UnauthorizedException('API key is required');
+    }
+
     const apiKey = await this.prisma.apiKey.findFirst({
       where: {
         keyHash: this.hashingService.hashApiKey(rawKey),
