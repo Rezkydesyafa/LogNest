@@ -97,3 +97,29 @@ Authenticated dashboard endpoints:
 - `GET /logs/:logId`
 
 Log query parameters include `projectId`, `serviceId`, `sourceType`, `level`, `environment`, `keyword`, `from`, `to`, `statusCode`, `path`, `page`, and `limit`.
+
+## Phase 4 APIs
+
+The worker consumes error/fatal log jobs, writes normalized entries to `parsed_logs`, generates fingerprints, counts fingerprint frequency in Redis, and creates or updates incidents.
+
+Authenticated incident endpoints:
+
+- `GET /incidents`
+- `GET /incidents/:incidentId`
+- `PATCH /incidents/:incidentId/status`
+- `GET /incidents/:incidentId/logs`
+
+Severity is based on rolling Redis windows:
+
+- `LOW`: 1-2 matching errors in 10 minutes
+- `MEDIUM`: 3-4 matching errors in 10 minutes
+- `HIGH`: 5 or more matching errors in 10 minutes
+- `CRITICAL`: 3 or more fatal logs in 5 minutes
+
+## Phase 5 APIs
+
+AI analysis is generated on demand and is never called from log ingestion.
+
+- `POST /incidents/:incidentId/analyze`
+
+The current OpenAI provider is a deterministic placeholder behind an `AiProvider` interface. It stores every success/failure in MongoDB `ai_analysis_results` and copies the latest successful summary fields onto the PostgreSQL incident row for fast dashboard reads.

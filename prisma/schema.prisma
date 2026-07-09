@@ -12,6 +12,25 @@ enum ApiKeyType {
   CLIENT
 }
 
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum IncidentEventType {
+  CREATED
+  UPDATED
+  STATUS_CHANGED
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -30,6 +49,7 @@ model Project {
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   apiKeys     ApiKey[]
   services    Service[]
+  incidents   Incident[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -64,10 +84,55 @@ model Service {
   lastSeenAt  DateTime @default(now())
   logCount    Int      @default(0)
   errorCount  Int      @default(0)
+  incidents   Incident[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@unique([projectId, name, environment])
   @@index([projectId])
   @@index([name])
+}
+
+model Incident {
+  id              String           @id @default(cuid())
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  serviceId       String
+  service         Service          @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  fingerprint     String
+  title           String
+  severity        IncidentSeverity
+  status          IncidentStatus   @default(OPEN)
+  occurrenceCount Int              @default(0)
+  firstSeenAt     DateTime         @default(now())
+  lastSeenAt      DateTime         @default(now())
+  lastRawLogId    String?
+  aiSummary       String?
+  aiPossibleCause String?
+  aiImpact        String?
+  aiSuggestedActions String[]       @default([])
+  aiConfidence    String?
+  aiLastAnalyzedAt DateTime?
+  aiError         String?
+  resolvedAt      DateTime?
+  events          IncidentEvent[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([projectId, serviceId, fingerprint])
+  @@index([projectId, status])
+  @@index([serviceId])
+  @@index([severity])
+}
+
+model IncidentEvent {
+  id         String            @id @default(cuid())
+  incidentId String
+  incident   Incident          @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  type       IncidentEventType
+  message    String
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+
+  @@index([incidentId])
 }

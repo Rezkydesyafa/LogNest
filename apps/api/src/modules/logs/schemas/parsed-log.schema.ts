@@ -36,3 +36,5 @@ export class ParsedLog {
 }
 
 export const ParsedLogSchema = SchemaFactory.createForClass(ParsedLog);
+ParsedLogSchema.index({ rawLogId: 1 }, { unique: true });
+ParsedLogSchema.index({ projectId: 1, serviceId: 1, fingerprint: 1 });

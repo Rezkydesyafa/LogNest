@@ -3,7 +3,9 @@ import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule, LogQueueModule, PinoLogger } from '../../../packages/shared/src';
 import { HealthModule } from './health/health.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
+import { AiAnalysisModule } from './modules/ai-analysis/ai-analysis.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { IncidentsModule } from './modules/incidents/incidents.module';
 import { LogsModule } from './modules/logs/logs.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { ServicesModule } from './modules/services/services.module';
@@ -19,6 +21,8 @@ import { ServicesModule } from './modules/services/services.module';
     ApiKeysModule,
     ServicesModule,
     LogsModule,
+    IncidentsModule,
+    AiAnalysisModule,
   ],
   providers: [PinoLogger],
 })
