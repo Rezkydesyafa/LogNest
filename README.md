@@ -134,3 +134,23 @@ Authenticated dashboard endpoints require `projectId`:
 - `GET /dashboard/frontend-errors?projectId=<projectId>`
 
 The summary endpoint returns service totals, today's log counts by source, error counts, open/critical incidents, top error services, slowest API endpoints, and recent incidents.
+
+## Phase 7 Package
+
+`@logmind/api-logger-express` captures Express API response logs and sends them to `POST /logs/ingest` with a server API key.
+
+```ts
+import { logmindApiLogger } from '@logmind/api-logger-express';
+
+app.use(
+  logmindApiLogger({
+    apiKey: process.env.LOGMIND_API_KEY,
+    serviceName: 'auth-service',
+    environment: 'development',
+    endpoint: 'http://logmind-api:4000/logs/ingest',
+    maskFields: ['password', 'token', 'authorization', 'cookie'],
+  }),
+);
+```
+
+Network failures are swallowed so the host app does not crash when LogMind is unavailable. Request bodies are not captured unless `captureRequestBody: true` is set.
