@@ -7,7 +7,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build:api && npm run build:worker",
+    "build": "npm run build:api-logger-express && npm run build:api && npm run build:worker",
+    "build:api-logger-express": "tsc -p packages/api-logger-express/tsconfig.app.json",
     "build:api": "tsc -p apps/api/tsconfig.app.json",
     "build:worker": "tsc -p apps/worker/tsconfig.app.json",
     "dev:api": "tsx watch apps/api/src/main.ts",
@@ -19,6 +20,7 @@
     "check:phase4": "tsx scripts/phase4-self-check.ts",
     "check:phase5": "tsx scripts/phase5-self-check.ts",
     "check:phase6": "tsx scripts/phase6-self-check.ts",
+    "check:phase7": "tsx scripts/phase7-self-check.ts",
     "docker:up": "docker compose up -d postgres mongodb redis",
     "docker:down": "docker compose down",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
