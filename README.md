@@ -18,6 +18,7 @@ Log ingestion, API keys, auth, incident grouping, AI analysis, SDKs, agent, and 
 ```bash
 npm install
 npm run docker:up
+npm run prisma:migrate
 npm run prisma:generate
 npm run dev:api
 npm run dev:worker
@@ -57,3 +58,21 @@ The monorepo uses plain npm workspaces and `tsc` instead of Nx or Turborepo. Tha
 4. Open `/health` to verify PostgreSQL, MongoDB, and Redis connectivity.
 
 Full log ingestion, Docker agent collection, incident detection, AI summaries, and dashboard UI are later phases.
+
+## Phase 2 APIs
+
+Authenticated dashboard endpoints use `Authorization: Bearer <token>`.
+
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/me`
+- `POST /projects`
+- `GET /projects`
+- `GET /projects/:projectId`
+- `PATCH /projects/:projectId`
+- `DELETE /projects/:projectId`
+- `POST /projects/:projectId/api-keys`
+- `GET /projects/:projectId/api-keys`
+- `DELETE /api-keys/:apiKeyId`
+
+Created API keys return the raw `key` once. Later list calls only return safe metadata: id, name, type, prefix, project id, usage, revocation, and creation timestamps.

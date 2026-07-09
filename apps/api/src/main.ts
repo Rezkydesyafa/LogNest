@@ -29,6 +29,8 @@ async function bootstrap() {
       .setTitle('LogMind AI API')
       .setDescription('Centralized logging and incident platform API')
       .setVersion('0.1.0')
+      .addBearerAuth()
+      .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'api-key')
       .build(),
   );
   SwaggerModule.setup('docs', app, document);
