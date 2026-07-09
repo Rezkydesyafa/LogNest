@@ -4,7 +4,9 @@ import { DatabaseModule, LogQueueModule, PinoLogger } from '../../../packages/sh
 import { HealthModule } from './health/health.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { LogsModule } from './modules/logs/logs.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { ServicesModule } from './modules/services/services.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { ProjectsModule } from './modules/projects/projects.module';
     AuthModule,
     ProjectsModule,
     ApiKeysModule,
+    ServicesModule,
+    LogsModule,
   ],
   providers: [PinoLogger],
 })
