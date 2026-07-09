@@ -29,6 +29,7 @@ model Project {
   ownerId     String
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   apiKeys     ApiKey[]
+  services    Service[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -50,4 +51,23 @@ model ApiKey {
 
   @@index([projectId])
   @@index([type])
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  environment String
+  sourceTypes String[] @default([])
+  metadata    Json?
+  lastSeenAt  DateTime @default(now())
+  logCount    Int      @default(0)
+  errorCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, name, environment])
+  @@index([projectId])
+  @@index([name])
 }
