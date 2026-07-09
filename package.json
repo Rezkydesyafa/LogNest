@@ -7,15 +7,18 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build:api-logger-express && npm run build:frontend-logger && npm run build:api && npm run build:worker",
+    "build": "npm run build:api-logger-express && npm run build:frontend-logger && npm run build:api && npm run build:worker && npm run build:agent",
     "build:api-logger-express": "tsc -p packages/api-logger-express/tsconfig.app.json",
     "build:frontend-logger": "tsc -p packages/frontend-logger/tsconfig.app.json",
     "build:api": "tsc -p apps/api/tsconfig.app.json",
     "build:worker": "tsc -p apps/worker/tsconfig.app.json",
+    "build:agent": "tsc -p apps/agent/tsconfig.app.json",
     "dev:api": "tsx watch apps/api/src/main.ts",
     "dev:worker": "tsx watch apps/worker/src/main.ts",
+    "dev:agent": "tsx watch apps/agent/src/main.ts",
     "start:api": "node dist/apps/api/src/main.js",
     "start:worker": "node dist/apps/worker/src/main.js",
+    "start:agent": "node dist/apps/agent/src/main.js",
     "check:phase2": "tsx scripts/phase2-self-check.ts",
     "check:phase3": "tsx scripts/phase3-self-check.ts",
     "check:phase4": "tsx scripts/phase4-self-check.ts",
@@ -23,6 +26,7 @@
     "check:phase6": "tsx scripts/phase6-self-check.ts",
     "check:phase7": "tsx scripts/phase7-self-check.ts",
     "check:phase8": "tsx scripts/phase8-self-check.ts",
+    "check:phase9": "tsx scripts/phase9-self-check.ts",
     "docker:up": "docker compose up -d postgres mongodb redis",
     "docker:down": "docker compose down",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
@@ -40,6 +44,7 @@
     "bullmq": "^5.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.0",
+    "dockerode": "^4.0.0",
     "ioredis": "^5.0.0",
     "mongoose": "^8.0.0",
     "pino": "^9.0.0",
@@ -48,6 +53,7 @@
     "swagger-ui-express": "^5.0.0"
   },
   "devDependencies": {
+    "@types/dockerode": "^3.3.0",
     "@types/node": "^22.0.0",
     "prisma": "^6.0.0",
     "tsx": "^4.0.0",

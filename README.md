@@ -172,3 +172,34 @@ initLogMindFrontend({
 
 The SDK includes page URL, route, user agent, language, and viewport metadata. Logging failures are swallowed so the frontend app keeps running.
 
+## Phase 9 Docker Agent
+
+`apps/agent` is a small Node.js Docker agent that watches containers with `logmind.enabled=true`, reads stdout/stderr through the Docker socket, adds container metadata, and sends Docker logs to `POST /logs/ingest` with a server API key.
+
+```yaml
+labels:
+  logmind.enabled: "true"
+  logmind.service: "payment-service"
+  logmind.environment: "development"
+```
+
+Required runtime settings:
+
+```env
+LOGMIND_API_KEY=lm_server_replace_me
+LOGMIND_INGEST_ENDPOINT=http://logmind-api:3000/logs/ingest
+LOGMIND_AGENT_CONTAINER_ID=
+LOGMIND_AGENT_RETRY_ATTEMPTS=3
+LOGMIND_AGENT_RETRY_DELAY_MS=1000
+```
+
+Example container mount:
+
+```yaml
+volumes:
+  - /var/run/docker.sock:/var/run/docker.sock
+labels:
+  logmind.agent: "true"
+```
+
+The agent ignores unlabeled containers and containers marked with `logmind.agent=true`. If the LogMind API is down, log delivery is retried and failures do not stop the agent.
