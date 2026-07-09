@@ -123,3 +123,14 @@ AI analysis is generated on demand and is never called from log ingestion.
 - `POST /incidents/:incidentId/analyze`
 
 The current OpenAI provider is a deterministic placeholder behind an `AiProvider` interface. It stores every success/failure in MongoDB `ai_analysis_results` and copies the latest successful summary fields onto the PostgreSQL incident row for fast dashboard reads.
+
+## Phase 6 APIs
+
+Authenticated dashboard endpoints require `projectId`:
+
+- `GET /dashboard/summary?projectId=<projectId>`
+- `GET /dashboard/services-health?projectId=<projectId>`
+- `GET /dashboard/api-performance?projectId=<projectId>`
+- `GET /dashboard/frontend-errors?projectId=<projectId>`
+
+The summary endpoint returns service totals, today's log counts by source, error counts, open/critical incidents, top error services, slowest API endpoints, and recent incidents.

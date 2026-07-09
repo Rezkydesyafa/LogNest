@@ -18,6 +18,7 @@
     "check:phase3": "tsx scripts/phase3-self-check.ts",
     "check:phase4": "tsx scripts/phase4-self-check.ts",
     "check:phase5": "tsx scripts/phase5-self-check.ts",
+    "check:phase6": "tsx scripts/phase6-self-check.ts",
     "docker:up": "docker compose up -d postgres mongodb redis",
     "docker:down": "docker compose down",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
