@@ -1,4 +1,4 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { LOG_PROCESSING_QUEUE, PinoLogger } from '../../../packages/shared/src';
 import { LogProcessingService } from './log-processing.service';
@@ -23,5 +23,10 @@ export class LogProcessor extends WorkerHost {
   async process(job: Job<LogProcessingJob>) {
     await this.logProcessingService.process(job.data);
     this.logger.log({ jobId: job.id, rawLogId: job.data.rawLogId }, 'processed log job');
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job<LogProcessingJob> | undefined, error: Error) {
+    this.logger.error({ jobId: job?.id, rawLogId: job?.data.rawLogId, err: error }, undefined, 'log job failed');
   }
 }

@@ -1,6 +1,7 @@
 export * from './constants';
 export * from './database/database.module';
 export * from './database/prisma.service';
+export * from './env';
 export * from './fingerprint';
 export * from './log-types';
 export * from './logging/pino-logger.service';

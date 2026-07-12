@@ -40,7 +40,7 @@
 
 ## About
 
-LogMind AI collects logs from three sources — Docker containers, backend API responses, and frontend browser errors — then stores, correlates, and processes them into actionable incidents with AI-generated summaries.
+LogMind AI collects logs from three sources: Docker containers, backend API responses, and frontend browser errors. It stores, correlates, and processes them into actionable incidents with AI-generated summaries.
 
 It is designed for Docker Compose environments, local development, and internal tooling.
 
@@ -176,6 +176,12 @@ It is designed for Docker Compose environments, local development, and internal 
    cp .env.example .env
    ```
 
+   PowerShell:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
 4. Start infrastructure:
 
    ```sh
@@ -189,10 +195,13 @@ It is designed for Docker Compose environments, local development, and internal 
    npm run prisma:generate
    ```
 
-6. Start the API and worker:
+6. Start the API and worker in separate terminals:
 
    ```sh
    npm run dev:api
+   ```
+
+   ```sh
    npm run dev:worker
    ```
 
@@ -202,7 +211,20 @@ It is designed for Docker Compose environments, local development, and internal 
    curl http://localhost:3000/health
    ```
 
-   Swagger docs are available at `http://localhost:3000/docs`.
+   Swagger UI is available at `http://localhost:3000/docs`.
+
+### Access
+
+- API base URL: `http://localhost:3000`
+- Health check: `http://localhost:3000/health`
+- Swagger UI: `http://localhost:3000/docs`
+- OpenAPI JSON: `http://localhost:3000/docs-json`
+
+In Swagger UI:
+
+- Use `POST /auth/register` or `POST /auth/login` to get `accessToken`.
+- Click `Authorize`, paste `Bearer <accessToken>` for JWT endpoints.
+- For ingestion endpoints, create an API key first, then authorize `x-api-key` with the raw key.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -211,15 +233,24 @@ It is designed for Docker Compose environments, local development, and internal 
 | Variable | Description | Default |
 |---|---|---|
 | `API_PORT` | API server port | `3000` |
-| `DATABASE_URL` | PostgreSQL connection string | — |
-| `MONGODB_URL` | MongoDB connection string | — |
-| `REDIS_URL` | Redis connection string | — |
-| `JWT_SECRET` | Secret for signing JWT tokens | — |
+| `DATABASE_URL` | PostgreSQL connection string | - |
+| `MONGODB_URL` | MongoDB connection string | - |
+| `REDIS_URL` | Redis connection string | - |
+| `JWT_SECRET` | Secret for signing JWT tokens | - |
 | `JWT_EXPIRES_IN_SECONDS` | Token expiry in seconds | `86400` |
 | `OPENAI_MODEL` | Model name for AI analysis | `gpt-4.1-mini` |
+| `OPENAI_API_KEY` | Enables real OpenAI incident analysis when set | - |
+| `OPENAI_BASE_URL` | OpenAI API base URL | `https://api.openai.com/v1` |
+| `OPENAI_TIMEOUT_MS` | OpenAI request timeout | `15000` |
+| `AI_PROVIDER_MODE` | Set `mock` to allow production without OpenAI | `mock` |
 | `AI_PROVIDER_FORCE_FAIL` | Force AI provider to fail (testing) | `false` |
-| `LOGMIND_API_KEY` | Server API key for the Docker agent | — |
-| `LOGMIND_INGEST_ENDPOINT` | Ingestion URL for the Docker agent | — |
+| `CORS_ORIGIN` | Comma-separated allowed frontend origins | `http://localhost:3001` |
+| `ENABLE_SWAGGER` | Enable `/docs`; disabled by default in production unless `true` | `true` |
+| `REQUEST_BODY_LIMIT` | JSON/urlencoded request body limit | `1mb` |
+| `AUTH_RATE_LIMIT_PER_MINUTE` | Per-IP auth rate limit | `20` |
+| `INGEST_RATE_LIMIT_PER_MINUTE` | Per-IP ingestion rate limit | `300` |
+| `LOGMIND_API_KEY` | Server API key for the Docker agent | - |
+| `LOGMIND_INGEST_ENDPOINT` | Ingestion URL for the Docker agent | - |
 | `LOGMIND_AGENT_RETRY_ATTEMPTS` | Agent retry count on failure | `3` |
 | `LOGMIND_AGENT_RETRY_DELAY_MS` | Delay between agent retries (ms) | `1000` |
 
@@ -294,6 +325,22 @@ Start the agent:
 npm run dev:agent
 ```
 
+### Production packaging
+
+Buildable production containers are available at:
+
+- `apps/api/Dockerfile`
+- `apps/worker/Dockerfile`
+- `apps/agent/Dockerfile`
+
+For production database migrations, use:
+
+```sh
+npm run prisma:migrate:deploy
+```
+
+Runtime hardening includes env fail-fast checks, CORS allow-listing, security headers, body size limits, per-IP auth/ingestion rate limits, BullMQ failed job retention, and MongoDB TTL indexes for log collections.
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 ## Roadmap
@@ -305,12 +352,13 @@ npm run dev:agent
 - [x] Service auto-registration
 - [x] Log search & filtering with pagination
 - [x] Worker with error fingerprinting & incident detection
-- [x] AI incident analysis (placeholder provider behind interface)
+- [x] AI incident analysis (OpenAI when configured, mock fallback for local/dev)
 - [x] Dashboard summary API (service health, API performance, frontend errors)
 - [x] Express API logger middleware (`@logmind/api-logger-express`)
 - [x] Frontend browser logger SDK (`@logmind/frontend-logger`)
 - [x] Docker log agent (`apps/agent`)
-- [ ] Real OpenAI provider integration
+- [x] Production hardening basics (env validation, CORS, rate limits, body limits, retention)
+- [x] Real OpenAI provider integration
 - [ ] Next.js frontend dashboard
 - [ ] Full Docker Compose demo environment (all services containerized)
 - [ ] Demo services (auth-service, payment-service, order-service)
@@ -319,9 +367,9 @@ npm run dev:agent
 
 ## Project Status
 
-The backend API, worker, Docker agent, and both SDKs are implemented. All self-check scripts (phase 2–9) pass.
+The backend API, worker, Docker agent, and both SDKs are implemented. Self-check scripts cover phase 2-9 plus production hardening.
 
-The AI provider is currently a deterministic placeholder behind an `AiProvider` interface — it can be swapped for a real OpenAI client without changing the rest of the codebase.
+The AI provider calls OpenAI when `OPENAI_API_KEY` is set and falls back to deterministic mock output for local development.
 
 The Next.js frontend dashboard and containerized demo services are not yet built.
 

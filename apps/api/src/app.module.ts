@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { DatabaseModule, LogQueueModule, PinoLogger } from '../../../packages/shared/src';
+import { DatabaseModule, LogQueueModule, PinoLogger, validateRuntimeEnv } from '../../../packages/shared/src';
 import { HealthModule } from './health/health.module';
 import { ApiKeysModule } from './modules/api-keys/api-keys.module';
 import { AiAnalysisModule } from './modules/ai-analysis/ai-analysis.module';
@@ -13,7 +13,7 @@ import { ServicesModule } from './modules/services/services.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateRuntimeEnv }),
     DatabaseModule,
     LogQueueModule,
     HealthModule,

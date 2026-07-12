@@ -3,6 +3,7 @@ import { HydratedDocument } from 'mongoose';
 import { LOG_LEVELS, LOG_SOURCE_TYPES, LogLevel, LogSourceType } from '../../../../../../packages/shared/src';
 
 export type ParsedLogDocument = HydratedDocument<ParsedLog>;
+const PARSED_LOG_RETENTION_SECONDS = 60 * 60 * 24 * 30;
 
 @Schema({
   collection: 'parsed_logs',
@@ -38,3 +39,4 @@ export class ParsedLog {
 export const ParsedLogSchema = SchemaFactory.createForClass(ParsedLog);
 ParsedLogSchema.index({ rawLogId: 1 }, { unique: true });
 ParsedLogSchema.index({ projectId: 1, serviceId: 1, fingerprint: 1 });
+ParsedLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: PARSED_LOG_RETENTION_SECONDS });

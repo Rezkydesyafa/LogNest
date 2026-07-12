@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
 export type AiAnalysisResultDocument = HydratedDocument<AiAnalysisResult>;
+const AI_ANALYSIS_RETENTION_SECONDS = 60 * 60 * 24 * 90;
 
 @Schema({
   collection: 'ai_analysis_results',
@@ -38,3 +39,4 @@ export class AiAnalysisResult {
 }
 
 export const AiAnalysisResultSchema = SchemaFactory.createForClass(AiAnalysisResult);
+AiAnalysisResultSchema.index({ createdAt: 1 }, { expireAfterSeconds: AI_ANALYSIS_RETENTION_SECONDS });

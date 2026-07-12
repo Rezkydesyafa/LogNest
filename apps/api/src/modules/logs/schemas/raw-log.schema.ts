@@ -3,6 +3,7 @@ import { HydratedDocument } from 'mongoose';
 import { LOG_LEVELS, LOG_SOURCE_TYPES, LogLevel, LogSourceType } from '../../../../../../packages/shared/src';
 
 export type RawLogDocument = HydratedDocument<RawLog>;
+const RAW_LOG_RETENTION_SECONDS = 60 * 60 * 24 * 30;
 
 @Schema({
   collection: 'raw_logs',
@@ -55,3 +56,4 @@ export class RawLog {
 
 export const RawLogSchema = SchemaFactory.createForClass(RawLog);
 RawLogSchema.index({ message: 'text', stackTrace: 'text' });
+RawLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: RAW_LOG_RETENTION_SECONDS });
