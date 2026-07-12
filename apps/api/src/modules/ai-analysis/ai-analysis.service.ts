@@ -1,20 +1,16 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { PrismaService } from '../../../../../packages/shared/src';
-import { ParsedLog } from '../logs/schemas/parsed-log.schema';
-import { RawLog } from '../logs/schemas/raw-log.schema';
-import { AiAnalysisValidator } from './ai-analysis.validator';
+import { ParsedLog, PrismaService, RawLog } from '../../../../../packages/shared/src';
+import { validateAiAnalysis } from './ai-analysis-validator';
 import { AI_PROVIDER, AiProvider } from './ai-provider.interface';
-import { PromptBuilderService } from './prompt-builder.service';
+import { buildPrompt } from './prompt-builder';
 import { AiAnalysisResult } from './schemas/ai-analysis-result.schema';
 
 @Injectable()
 export class AiAnalysisService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly promptBuilder: PromptBuilderService,
-    private readonly validator: AiAnalysisValidator,
     @Inject(AI_PROVIDER) private readonly provider: AiProvider,
     @InjectModel(RawLog.name) private readonly rawLogModel: Model<RawLog>,
     @InjectModel(ParsedLog.name) private readonly parsedLogModel: Model<ParsedLog>,
@@ -41,10 +37,10 @@ export class AiAnalysisService {
       },
       sampleLogs,
     };
-    const prompt = this.promptBuilder.build({ incident, sampleLogs });
+    const prompt = buildPrompt({ incident, sampleLogs });
 
     try {
-      const output = this.validator.validate(
+      const output = validateAiAnalysis(
         await this.provider.analyzeIncident({ incident, sampleLogs, prompt }),
       );
 

@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { LogLevel, LogSourceType, PrismaService } from '../../../../../packages/shared/src';
+import { LogLevel, LogSourceType, PrismaService, RawLog } from '../../../../../packages/shared/src';
 import { maskSensitiveData } from '../../common/utils/mask-sensitive-data';
 import { pagination } from '../../common/utils/pagination';
 import { ApiKeyContext } from '../../common/types/auth.types';
@@ -10,7 +10,6 @@ import { FindLogsQueryDto } from './dto/find-logs-query.dto';
 import { FrontendLogDto } from './dto/frontend-log.dto';
 import { LogIngestionDto } from './dto/log-ingestion.dto';
 import { LogQueueProducer } from './log-queue.producer';
-import { RawLog } from './schemas/raw-log.schema';
 
 type LogQueryFilter = Record<string, unknown>;
 

@@ -1,11 +1,10 @@
 import { strict as assert } from 'assert';
-import { AiAnalysisValidator } from '../apps/api/src/modules/ai-analysis/ai-analysis.validator';
+import { validateAiAnalysis } from '../apps/api/src/modules/ai-analysis/ai-analysis-validator';
 import { OpenAiProvider } from '../apps/api/src/modules/ai-analysis/openai.provider';
-import { PromptBuilderService } from '../apps/api/src/modules/ai-analysis/prompt-builder.service';
+import { buildPrompt } from '../apps/api/src/modules/ai-analysis/prompt-builder';
 
 async function main() {
-  const validator = new AiAnalysisValidator();
-  const output = validator.validate({
+  const output = validateAiAnalysis({
     summary: 'Payment service mengalami error 500 berulang pada endpoint /checkout.',
     possibleCause: 'Kemungkinan terjadi database timeout.',
     impact: 'User mungkin gagal melakukan checkout.',
@@ -14,7 +13,7 @@ async function main() {
   });
 
   assert.equal(output.confidence, 'medium');
-  assert.throws(() => validator.validate({ summary: 'bad' }));
+  assert.throws(() => validateAiAnalysis({ summary: 'bad' }));
 
   const incident = {
     id: 'incident_1',
@@ -53,7 +52,7 @@ async function main() {
     },
   } as never;
   const sampleLogs = [{ message: 'Database timeout', api: { path: '/checkout', statusCode: 500 } }];
-  const prompt = new PromptBuilderService().build({ incident, sampleLogs });
+  const prompt = buildPrompt({ incident, sampleLogs });
 
   assert.equal(prompt.includes('expectedOutput'), true);
 

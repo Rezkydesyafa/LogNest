@@ -5,7 +5,10 @@ import { Collection, Connection, Types } from 'mongoose';
 import {
   generateFingerprint,
   LogLevel,
+  PARSED_LOG_COLLECTION,
   PrismaService,
+  RAW_LOG_COLLECTION,
+  RawLog,
   RedisService,
 } from '../../../packages/shared/src';
 
@@ -15,19 +18,6 @@ type LogProcessingJob = {
   serviceId: string;
   sourceType: string;
   level: string;
-};
-
-type RawLogRecord = {
-  _id: Types.ObjectId;
-  projectId: string;
-  serviceId: string;
-  sourceType: string;
-  serviceName: string;
-  level: LogLevel;
-  message: string;
-  timestamp: Date;
-  api?: Record<string, unknown>;
-  stackTrace?: string;
 };
 
 @Injectable()
@@ -188,11 +178,11 @@ export class LogProcessingService implements OnModuleInit {
     return IncidentSeverity.LOW;
   }
 
-  private rawLogs(): Collection<RawLogRecord> {
-    return this.mongo.collection<RawLogRecord>('raw_logs');
+  private rawLogs(): Collection<RawLog> {
+    return this.mongo.collection<RawLog>(RAW_LOG_COLLECTION);
   }
 
   private parsedLogs() {
-    return this.mongo.collection('parsed_logs');
+    return this.mongo.collection(PARSED_LOG_COLLECTION);
   }
 }

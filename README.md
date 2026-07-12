@@ -1,298 +1,163 @@
-<a id="readme-top"></a>
+# LogMind AI
 
-<!-- PROJECT SHIELDS -->
-
-[![NestJS][nestjs-shield]][nestjs-url]
-[![TypeScript][ts-shield]][ts-url]
-[![PostgreSQL][pg-shield]][pg-url]
-[![MongoDB][mongo-shield]][mongo-url]
-[![Redis][redis-shield]][redis-url]
-[![Docker][docker-shield]][docker-url]
-
-<br />
-
-<h3 align="center">LogMind AI</h3>
-<p align="center">
-  AI-assisted centralized logging and incident platform for Docker-based applications.
-</p>
-
----
-
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li><a href="#about">About</a></li>
-    <li><a href="#key-features">Key Features</a></li>
-    <li><a href="#architecture">Architecture</a></li>
-    <li><a href="#tech-stack">Tech Stack</a></li>
-    <li><a href="#monorepo-structure">Monorepo Structure</a></li>
-    <li><a href="#getting-started">Getting Started</a></li>
-    <li><a href="#environment-variables">Environment Variables</a></li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#project-status">Project Status</a></li>
-    <li><a href="#license">License</a></li>
-  </ol>
-</details>
-
----
-
-## About
-
-LogMind AI collects logs from three sources: Docker containers, backend API responses, and frontend browser errors. It stores, correlates, and processes them into actionable incidents with AI-generated summaries.
-
-It is designed for Docker Compose environments, local development, and internal tooling.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## Key Features
-
-- **Multi-source log ingestion** — Docker stdout/stderr, Express API responses, and browser errors flow into a single API.
-- **Automatic service registry** — Services are created on first log arrival. No manual setup.
-- **Error fingerprinting** — Repeated errors are grouped by normalized message, source, and path.
-- **Incident detection** — Incidents are created automatically when error frequency exceeds configurable thresholds.
-- **AI incident summary** — On-demand AI analysis generates root cause suggestions and action items.
-- **Dashboard API** — Aggregated endpoints for service health, API performance, frontend errors, and incident overview.
-- **SDK & middleware** — Drop-in Express middleware and browser SDK for log collection.
-- **Separated worker** — Heavy processing (fingerprinting, incident detection) runs in a standalone worker process.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+LogMind AI is a centralized logging and incident platform for Docker-based applications. It collects container, API, worker, manual, and browser logs; stores raw events in MongoDB; processes errors through BullMQ; and stores incidents in PostgreSQL.
 
 ## Architecture
 
-```
-┌─────────────────┐  ┌──────────────────┐  ┌───────────────────┐
-│  Docker Agent   │  │ Express Services │  │  Frontend Apps    │
-│  (dockerode)    │  │ (@logmind/       │  │ (@logmind/        │
-│                 │  │  api-logger-     │  │  frontend-logger) │
-│                 │  │  express)        │  │                   │
-└────────┬────────┘  └────────┬─────────┘  └────────┬──────────┘
-         │                    │                      │
-         │  POST /logs/ingest │  POST /logs/ingest   │ POST /logs/frontend
-         └────────────────────┼──────────────────────┘
-                              ▼
-                 ┌────────────────────────┐
-                 │   NestJS API Server    │
-                 │  (auth, ingestion,     │
-                 │   search, dashboard)   │
-                 └──────┬────────┬────────┘
-                        │        │
-                  store │        │ enqueue error/fatal
-                        ▼        ▼
-                 ┌──────────┐  ┌───────┐
-                 │ MongoDB  │  │ Redis │
-                 │ raw_logs │  │ Queue │
-                 └──────────┘  └───┬───┘
-                                   │
-                                   ▼
-                 ┌────────────────────────┐
-                 │   NestJS Worker        │
-                 │  (fingerprint,         │
-                 │   incident detection,  │
-                 │   severity scoring)    │
-                 └──────────┬─────────────┘
-                            │
-                            ▼
-                 ┌────────────────────────┐
-                 │  PostgreSQL            │
-                 │  (users, projects,     │
-                 │   services, incidents) │
-                 └────────────────────────┘
+```text
+Docker containers ──> Docker Agent ──┐
+Express services ──> API middleware ─┼─> NestJS API ─> MongoDB raw_logs
+Browser apps ──────> Frontend SDK ───┘                    │
+                                                          v
+                                                    Redis / BullMQ
+                                                          │
+                                                          v
+                                                   NestJS Worker
+                                                   fingerprinting
+                                                   incident detection
+                                                          │
+                                                          v
+                                                     PostgreSQL
+                                                          │
+                                                          v
+                                               Dashboard API + Next.js UI
 ```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+PostgreSQL stores users, projects, API keys, services, incidents, and incident events. MongoDB stores raw logs, parsed logs, and AI analysis results. Redis provides the processing queue and fingerprint frequency windows.
 
-## Tech Stack
+## Repository
 
-| Layer | Technology |
-|---|---|
-| API & Worker | NestJS, TypeScript |
-| Relational DB | PostgreSQL, Prisma |
-| Document DB | MongoDB, Mongoose |
-| Queue | Redis, BullMQ |
-| Docker Agent | Node.js, dockerode |
-| Auth | JWT, bcrypt |
-| Validation | class-validator, class-transformer |
-| Logging | Pino |
-| API Docs | Swagger / OpenAPI |
-| Frontend Dashboard | Next.js *(planned)* |
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## Monorepo Structure
-
-```
-├── apps/
-│   ├── api/              # NestJS HTTP API
-│   │   └── src/
-│   │       ├── common/   # Guards, interceptors, filters, decorators
-│   │       ├── health/   # Health check endpoint
-│   │       └── modules/  # auth, projects, api-keys, services,
-│   │                     # logs, incidents, ai-analysis, dashboard
-│   ├── worker/           # BullMQ log processor (standalone NestJS app)
-│   └── agent/            # Docker log collector (Node.js + dockerode)
-│
-├── packages/
-│   ├── shared/               # Constants, Prisma service, Redis service, Pino logger
-│   ├── api-logger-express/   # Express middleware for API response logging
-│   └── frontend-logger/      # Browser SDK for error and fetch logging
-│
-├── prisma/
-│   └── schema.prisma     # PostgreSQL schema (User, Project, ApiKey, Service, Incident)
-│
-├── docker-compose.yml    # PostgreSQL, MongoDB, Redis
-└── package.json          # Workspace root
+```text
+apps/
+  api/                 NestJS REST API
+  worker/              BullMQ log processor
+  agent/               Docker socket log collector
+  dashboard/           Next.js operations dashboard
+packages/
+  shared/              Database, queue, logging, and log storage contracts
+  api-logger-express/  Express request/response middleware
+  frontend-logger/     Browser error and failed-fetch SDK
+prisma/                PostgreSQL schema and migrations
+scripts/               Runnable self-checks
 ```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+## Requirements
 
-## Getting Started
+- Node.js 22 or newer
+- npm 10 or newer
+- Docker with Docker Compose
 
-### Prerequisites
+## Local Setup
 
-- Node.js ≥ 18
-- npm
-- Docker & Docker Compose
-
-### Installation
-
-1. Clone the repository:
-
-   ```sh
-   git clone https://github.com/your-username/nest-logmind.git
-   cd nest-logmind
-   ```
-
-2. Install dependencies:
-
-   ```sh
-   npm install
-   ```
-
-3. Copy the environment file:
-
-   ```sh
-   cp .env.example .env
-   ```
-
-   PowerShell:
+1. Install dependencies and create the environment file.
 
    ```powershell
+   npm install
    Copy-Item .env.example .env
    ```
 
-4. Start infrastructure:
+2. Start PostgreSQL, MongoDB, and Redis.
 
-   ```sh
+   ```powershell
    npm run docker:up
    ```
 
-5. Run database migrations:
+3. Apply the database schema.
 
-   ```sh
+   ```powershell
    npm run prisma:migrate
    npm run prisma:generate
    ```
 
-6. Start the API and worker in separate terminals:
+4. Start each process in a separate terminal.
 
-   ```sh
+   ```powershell
    npm run dev:api
-   ```
-
-   ```sh
    npm run dev:worker
+   npm run dev:dashboard
    ```
 
-7. Verify:
+   The Docker agent is optional during local development:
 
-   ```sh
-   curl http://localhost:3000/health
+   ```powershell
+   npm run dev:agent
    ```
 
-   Swagger UI is available at `http://localhost:3000/docs`.
+## Access
 
-### Access
-
-- API base URL: `http://localhost:3000`
-- Health check: `http://localhost:3000/health`
+- Dashboard: `http://localhost:3001`
+- API: `http://localhost:3000`
+- Health: `http://localhost:3000/health`
 - Swagger UI: `http://localhost:3000/docs`
 - OpenAPI JSON: `http://localhost:3000/docs-json`
 
-In Swagger UI:
+Register through the dashboard or `POST /auth/register`, create a project, then create server and client API keys from the API Keys page. Raw keys are only returned once.
 
-- Use `POST /auth/register` or `POST /auth/login` to get `accessToken`.
-- Click `Authorize`, paste `Bearer <accessToken>` for JWT endpoints.
-- For ingestion endpoints, create an API key first, then authorize `x-api-key` with the raw key.
+## Environment
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+The complete list is documented in `.env.example`. Production requires valid values for:
 
-## Environment Variables
-
-| Variable | Description | Default |
-|---|---|---|
-| `API_PORT` | API server port | `3000` |
-| `DATABASE_URL` | PostgreSQL connection string | - |
-| `MONGODB_URL` | MongoDB connection string | - |
-| `REDIS_URL` | Redis connection string | - |
-| `JWT_SECRET` | Secret for signing JWT tokens | - |
-| `JWT_EXPIRES_IN_SECONDS` | Token expiry in seconds | `86400` |
-| `OPENAI_MODEL` | Model name for AI analysis | `gpt-4.1-mini` |
-| `OPENAI_API_KEY` | Enables real OpenAI incident analysis when set | - |
-| `OPENAI_BASE_URL` | OpenAI API base URL | `https://api.openai.com/v1` |
-| `OPENAI_TIMEOUT_MS` | OpenAI request timeout | `15000` |
-| `AI_PROVIDER_MODE` | Set `mock` to allow production without OpenAI | `mock` |
-| `AI_PROVIDER_FORCE_FAIL` | Force AI provider to fail (testing) | `false` |
-| `CORS_ORIGIN` | Comma-separated allowed frontend origins | `http://localhost:3001` |
-| `ENABLE_SWAGGER` | Enable `/docs`; disabled by default in production unless `true` | `true` |
-| `REQUEST_BODY_LIMIT` | JSON/urlencoded request body limit | `1mb` |
-| `AUTH_RATE_LIMIT_PER_MINUTE` | Per-IP auth rate limit | `20` |
-| `INGEST_RATE_LIMIT_PER_MINUTE` | Per-IP ingestion rate limit | `300` |
-| `LOGMIND_API_KEY` | Server API key for the Docker agent | - |
-| `LOGMIND_INGEST_ENDPOINT` | Ingestion URL for the Docker agent | - |
-| `LOGMIND_AGENT_RETRY_ATTEMPTS` | Agent retry count on failure | `3` |
-| `LOGMIND_AGENT_RETRY_DELAY_MS` | Delay between agent retries (ms) | `1000` |
-
-See [`.env.example`](.env.example) for a complete template.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## Usage
-
-### Sending logs via API key
-
-```sh
-# Server-side log ingestion
-curl -X POST http://localhost:3000/logs/ingest \
-  -H "x-api-key: <server_api_key>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sourceType": "api",
-    "serviceName": "payment-service",
-    "environment": "development",
-    "level": "error",
-    "message": "POST /checkout returned 500",
-    "timestamp": "2026-07-09T10:00:00.000Z"
-  }'
+```env
+DATABASE_URL=
+MONGODB_URL=
+REDIS_URL=
+JWT_SECRET=
+CORS_ORIGIN=
+LOGMIND_API_URL=
 ```
 
-### Express middleware
+AI analysis uses deterministic local output by default. Enable OpenAI with:
+
+```env
+AI_PROVIDER_MODE=openai
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+Browser logging from the dashboard is optional:
+
+```env
+NEXT_PUBLIC_LOGMIND_API_URL=http://localhost:3000
+NEXT_PUBLIC_LOGMIND_CLIENT_KEY=
+```
+
+## Log Ingestion
+
+Server API keys can send `docker`, `api`, `worker`, and `manual` logs:
+
+```http
+POST /logs/ingest
+x-api-key: lm_server_...
+content-type: application/json
+
+{
+  "sourceType": "api",
+  "serviceName": "payment-service",
+  "environment": "development",
+  "level": "error",
+  "message": "Database connection timeout",
+  "timestamp": "2026-07-08T10:30:00.000Z"
+}
+```
+
+Client API keys can only send browser logs to `POST /logs/frontend`. Sensitive keys such as password, token, authorization, cookie, and secret are masked before storage.
+
+## Express Middleware
 
 ```ts
 import { logmindApiLogger } from '@logmind/api-logger-express';
 
-app.use(
-  logmindApiLogger({
-    apiKey: process.env.LOGMIND_API_KEY,
-    serviceName: 'auth-service',
-    environment: 'development',
-    endpoint: 'http://localhost:3000/logs/ingest',
-  }),
-);
+app.use(logmindApiLogger({
+  apiKey: process.env.LOGMIND_API_KEY,
+  serviceName: 'auth-service',
+  environment: 'development',
+  endpoint: 'http://localhost:3000/logs/ingest',
+}));
 ```
 
-### Browser SDK
+The middleware records method, path, status, duration, request ID, IP, user agent, and errors. Delivery failures never crash the host application.
+
+## Frontend SDK
 
 ```ts
 import { initLogMindFrontend } from '@logmind/frontend-logger';
@@ -305,93 +170,67 @@ initLogMindFrontend({
 });
 ```
 
-### Docker Agent
+The SDK captures global errors, unhandled rejections, and failed fetch requests. Delivery failures are ignored by design.
 
-Add labels to monitored containers:
+## Docker Agent
+
+The agent watches only containers with `logmind.enabled=true` and ignores itself.
 
 ```yaml
-services:
-  payment-service:
-    image: payment-service
-    labels:
-      logmind.enabled: "true"
-      logmind.service: "payment-service"
-      logmind.environment: "development"
+labels:
+  logmind.enabled: "true"
+  logmind.service: "payment-service"
+  logmind.environment: "development"
 ```
 
-Start the agent:
+Mount `/var/run/docker.sock` when running the agent as a container.
 
-```sh
-npm run dev:agent
+## Incident Processing
+
+Error and fatal logs are queued after ingestion. The worker normalizes messages, generates fingerprints, stores parsed logs, and maintains a Redis frequency window.
+
+- `low`: 1-2 errors in 10 minutes
+- `medium`: 3-4 errors in 10 minutes
+- `high`: 5 or more errors in 10 minutes
+- `critical`: 3 or more fatal errors in 5 minutes
+
+Incident analysis is requested asynchronously through `POST /incidents/:incidentId/analyze` and stored in MongoDB before incident AI fields are updated in PostgreSQL.
+
+## Demo Flow
+
+1. Start infrastructure, API, worker, and dashboard.
+2. Register and create a project.
+3. Create a server API key.
+4. Send five equivalent error logs within ten minutes.
+5. Open Incidents in the dashboard and inspect the generated fingerprint group.
+6. Generate the AI analysis from the incident detail page.
+
+The full containerized Phase 10 demo services are not implemented yet. Current Compose starts PostgreSQL, MongoDB, and Redis only.
+
+## Verification
+
+```powershell
+npm run build
+npm run check:production
+npm run check:dashboard
 ```
 
-### Production packaging
+Focused self-checks are available as `check:phase2` through `check:phase9`.
 
-Buildable production containers are available at:
+## Production
 
-- `apps/api/Dockerfile`
-- `apps/worker/Dockerfile`
-- `apps/agent/Dockerfile`
+Production Dockerfiles are available under each application directory. Apply migrations before starting the API:
 
-For production database migrations, use:
-
-```sh
+```powershell
 npm run prisma:migrate:deploy
 ```
 
-Runtime hardening includes env fail-fast checks, CORS allow-listing, security headers, body size limits, per-IP auth/ingestion rate limits, BullMQ failed job retention, and MongoDB TTL indexes for log collections.
+Production hardening includes environment validation, CORS allow-listing, security headers, body limits, ingestion/auth rate limits, failed BullMQ job retention, HTTP-only dashboard sessions, and MongoDB TTL indexes.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+Swagger is disabled in production unless `ENABLE_SWAGGER=true`. Terminate TLS at the platform or reverse proxy and store all credentials in the deployment secret manager.
 
-## Roadmap
+## Current MVP
 
-- [x] NestJS API foundation (PostgreSQL, MongoDB, Redis, BullMQ)
-- [x] Authentication (register, login, JWT)
-- [x] Project & API key management (server/client key separation)
-- [x] Central log ingestion (`/logs/ingest`, `/logs/frontend`)
-- [x] Service auto-registration
-- [x] Log search & filtering with pagination
-- [x] Worker with error fingerprinting & incident detection
-- [x] AI incident analysis (OpenAI when configured, mock fallback for local/dev)
-- [x] Dashboard summary API (service health, API performance, frontend errors)
-- [x] Express API logger middleware (`@logmind/api-logger-express`)
-- [x] Frontend browser logger SDK (`@logmind/frontend-logger`)
-- [x] Docker log agent (`apps/agent`)
-- [x] Production hardening basics (env validation, CORS, rate limits, body limits, retention)
-- [x] Real OpenAI provider integration
-- [ ] Next.js frontend dashboard
-- [ ] Full Docker Compose demo environment (all services containerized)
-- [ ] Demo services (auth-service, payment-service, order-service)
+Implemented: API, worker, Docker agent, dashboard, Express middleware, frontend SDK, authentication, projects, API keys, ingestion, search, fingerprinting, incidents, AI analysis, and dashboard summaries.
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## Project Status
-
-The backend API, worker, Docker agent, and both SDKs are implemented. Self-check scripts cover phase 2-9 plus production hardening.
-
-The AI provider calls OpenAI when `OPENAI_API_KEY` is set and falls back to deterministic mock output for local development.
-
-The Next.js frontend dashboard and containerized demo services are not yet built.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## License
-
-Distributed under the MIT License.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-<!-- MARKDOWN LINKS & IMAGES -->
-
-[nestjs-shield]: https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white
-[nestjs-url]: https://nestjs.com/
-[ts-shield]: https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white
-[ts-url]: https://www.typescriptlang.org/
-[pg-shield]: https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white
-[pg-url]: https://www.postgresql.org/
-[mongo-shield]: https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white
-[mongo-url]: https://www.mongodb.com/
-[redis-shield]: https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white
-[redis-url]: https://redis.io/
-[docker-shield]: https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white
-[docker-url]: https://www.docker.com/
+Remaining for the full demo: containerize all services in one Compose file and add demo auth, payment, and order services.

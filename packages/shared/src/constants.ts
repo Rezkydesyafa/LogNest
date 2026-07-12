@@ -8,3 +8,7 @@ export const DEFAULT_REDIS_URL = 'redis://localhost:6379';
 export const LOG_SOURCE_TYPES = ['docker', 'api', 'frontend', 'worker', 'manual'] as const;
 export const SERVER_LOG_SOURCE_TYPES = ['docker', 'api', 'worker', 'manual'] as const;
 export const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'fatal'] as const;
+
+export type LogSourceType = (typeof LOG_SOURCE_TYPES)[number];
+export type ServerLogSourceType = (typeof SERVER_LOG_SOURCE_TYPES)[number];
+export type LogLevel = (typeof LOG_LEVELS)[number];

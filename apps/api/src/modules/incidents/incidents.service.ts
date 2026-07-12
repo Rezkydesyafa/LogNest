@@ -2,11 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { IncidentEventType, IncidentStatus, Prisma } from '@prisma/client';
 import { Model, Types } from 'mongoose';
-import { PrismaService } from '../../../../../packages/shared/src';
+import { ParsedLog, PrismaService, RawLog } from '../../../../../packages/shared/src';
 import { pagination } from '../../common/utils/pagination';
 import { FindIncidentsQueryDto } from './dto/find-incidents-query.dto';
-import { ParsedLog } from '../logs/schemas/parsed-log.schema';
-import { RawLog } from '../logs/schemas/raw-log.schema';
 
 @Injectable()
 export class IncidentsService {

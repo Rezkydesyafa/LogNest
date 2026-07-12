@@ -2,8 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { IncidentSeverity, IncidentStatus } from '@prisma/client';
 import { Model } from 'mongoose';
-import { PrismaService } from '../../../../../packages/shared/src';
-import { RawLog } from '../logs/schemas/raw-log.schema';
+import { PrismaService, RawLog } from '../../../../../packages/shared/src';
 import { serviceHealthStatus } from './dashboard-health';
 
 type CountBySource = {

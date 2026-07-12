@@ -1,7 +1,4 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
-
-export type AiAnalysisResultDocument = HydratedDocument<AiAnalysisResult>;
 const AI_ANALYSIS_RETENTION_SECONDS = 60 * 60 * 24 * 90;
 
 @Schema({
