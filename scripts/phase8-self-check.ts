@@ -84,6 +84,26 @@ async function main() {
 
   assert.equal(nextPayload?.message, 'hello');
   assert.deepEqual(nextPayload?.metadata, { token: '[masked]' });
+
+  let ingestionCalls = 0;
+  const loopSafeClient = initLogMindFrontend({
+    apiKey: 'client-key',
+    serviceName: 'frontend-dashboard',
+    environment: 'development',
+    endpoint: 'http://logmind/logs/frontend',
+    captureGlobalErrors: false,
+    windowRef: {
+      fetch: async () => {
+        ingestionCalls += 1;
+        return new Response('{}', { status: 500 });
+      },
+    } as unknown as Window,
+  });
+
+  loopSafeClient.captureMessage('ingestion failure');
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  loopSafeClient.destroy();
+  assert.equal(ingestionCalls, 1);
   console.log('phase8 self-check passed');
 }
 

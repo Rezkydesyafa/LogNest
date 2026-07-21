@@ -34,9 +34,11 @@ function main() {
     JWT_SECRET: 'prod-secret',
     AI_PROVIDER_MODE: 'mock',
     AUTH_RATE_LIMIT_PER_MINUTE: '2',
+    TRUST_PROXY_HOPS: '1',
   });
   assert.equal(env.AUTH_RATE_LIMIT_PER_MINUTE, 2);
   assert.equal(env.AI_PROVIDER_MODE, 'mock');
+  assert.equal(env.TRUST_PROXY_HOPS, 1);
 
   assert.equal(
     extractOutputText({
@@ -47,7 +49,7 @@ function main() {
 
   let statusCode = 0;
   const limiter = createRateLimit({ name: 'test', windowMs: 60_000, max: 1 });
-  const request = { headers: {}, ip: '127.0.0.1', socket: {} };
+  const request = { headers: { 'x-forwarded-for': '203.0.113.1' }, ip: '127.0.0.1', socket: {} };
   const response = {
     setHeader: () => undefined,
     status: (code: number) => {
@@ -58,7 +60,11 @@ function main() {
   };
 
   limiter(request as never, response as never, () => undefined);
-  limiter(request as never, response as never, () => undefined);
+  limiter(
+    { ...request, headers: { 'x-forwarded-for': '203.0.113.2' } } as never,
+    response as never,
+    () => undefined,
+  );
   assert.equal(statusCode, 429);
 
   console.log('production self-check passed');

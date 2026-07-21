@@ -1,5 +1,5 @@
 import { strict as assert } from 'assert';
-import { LOG_LEVELS, LOG_SOURCE_TYPES, SERVER_LOG_SOURCE_TYPES } from '../packages/shared/src';
+import { LOG_LEVELS, LOG_SOURCE_TYPES, SERVER_LOG_SOURCE_TYPES } from '../packages/shared/src/constants';
 import { maskSensitiveData } from '../apps/api/src/common/utils/mask-sensitive-data';
 import { pagination } from '../apps/api/src/common/utils/pagination';
 
