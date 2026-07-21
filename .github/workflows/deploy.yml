@@ -79,7 +79,7 @@ jobs:
             IdentityFile ~/.ssh/id_ed25519
             IdentitiesOnly yes
             StrictHostKeyChecking yes
-            ProxyCommand cloudflared access ssh --hostname %h
+            ProxyCommand cloudflared access ssh --hostname %h --service-token-id $TUNNEL_SERVICE_TOKEN_ID --service-token-secret $TUNNEL_SERVICE_TOKEN_SECRET
           EOF
           chmod 600 ~/.ssh/config ~/.ssh/id_ed25519 ~/.ssh/known_hosts
       - name: Create release archive
