@@ -2,6 +2,9 @@
   "name": "logmind-ai",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -38,13 +41,13 @@
     "check:dashboard": "tsx scripts/dashboard-self-check.ts"
   },
   "dependencies": {
-    "@nestjs/bullmq": "^10.0.0",
-    "@nestjs/common": "^10.0.0",
-    "@nestjs/config": "^3.0.0",
-    "@nestjs/core": "^10.0.0",
-    "@nestjs/mongoose": "^10.0.0",
-    "@nestjs/platform-express": "^10.0.0",
-    "@nestjs/swagger": "^7.0.0",
+    "@nestjs/bullmq": "^11.0.4",
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/config": "^4.0.4",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/mongoose": "^11.0.4",
+    "@nestjs/platform-express": "^11.1.28",
+    "@nestjs/swagger": "^11.4.6",
     "@prisma/client": "^6.0.0",
     "bullmq": "^5.0.0",
     "class-transformer": "^0.5.1",
@@ -53,13 +56,13 @@
     "ioredis": "^5.0.0",
     "mongoose": "^8.0.0",
     "pino": "^9.0.0",
+    "prisma": "^6.0.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0"
   },
   "devDependencies": {
     "@types/dockerode": "^3.3.0",
     "@types/node": "^22.0.0",
-    "prisma": "^6.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   }

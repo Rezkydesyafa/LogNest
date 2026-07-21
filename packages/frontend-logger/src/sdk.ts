@@ -38,8 +38,12 @@ export type LogMindFrontendClient = {
 export function initLogMindFrontend(options: LogMindFrontendOptions): LogMindFrontendClient {
   const cleanups: Array<() => void> = [];
   const windowRef = options.windowRef ?? (typeof window === 'undefined' ? undefined : window);
+  const sendOptions = {
+    ...options,
+    fetchImpl: options.fetchImpl ?? windowRef?.fetch?.bind(windowRef),
+  };
   const send = (payload: Omit<FrontendLogPayload, 'serviceName' | 'environment' | 'timestamp' | 'frontend'>) =>
-    sendFrontendLog(options, {
+    sendFrontendLog(sendOptions, {
       ...payload,
       serviceName: options.serviceName,
       environment: options.environment,
