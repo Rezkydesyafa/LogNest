@@ -221,7 +221,7 @@ Focused self-checks are available as `check:phase2` through `check:phase9`.
 
 ## Production
 
-Production deployment uses `compose.production.yml`, Caddy, Cloudflare Tunnel, and `.github/workflows/deploy.yml`. PostgreSQL, MongoDB, and Redis are private to the Compose network; Caddy binds only to `127.0.0.1:80` for the local tunnel origin.
+Production deployment uses `compose.production.yml`, Caddy, Cloudflare Tunnel, and `.github/workflows/deploy.yml`. PostgreSQL, MongoDB, and Redis are private to the Compose network; Caddy binds only to `127.0.0.1:8080` for the local tunnel origin.
 
 Prepare an Ubuntu VPS with Docker Engine and the Compose plugin, then create the application directory:
 
@@ -230,7 +230,7 @@ sudo mkdir -p /opt/logmind/releases
 sudo chown -R "$USER":"$USER" /opt/logmind
 ```
 
-Copy `.env.production.example` to `/opt/logmind/.env.production` and replace every placeholder. Use URL-safe secrets, for example `openssl rand -hex 32`. Publish the application hostname through Cloudflare Tunnel to `http://localhost:80`, then configure:
+Copy `.env.production.example` to `/opt/logmind/.env.production` and replace every placeholder. Use URL-safe secrets, for example `openssl rand -hex 32`. Publish the application hostname through Cloudflare Tunnel to `http://localhost:8080`, then configure:
 
 ```env
 SITE_ADDRESS=:80
