@@ -1,0 +1,11 @@
+{$SITE_ADDRESS:http://localhost} {
+  encode zstd gzip
+
+  handle_path /backend/* {
+    reverse_proxy api:3000
+  }
+
+  handle {
+    reverse_proxy dashboard:3001
+  }
+}

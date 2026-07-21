@@ -1,0 +1,91 @@
+name: CI and Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: logmind-production
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run build
+      - name: Run self-checks
+        run: |
+          npm run check:phase2
+          npm run check:phase3
+          npm run check:phase4
+          npm run check:phase5
+          npm run check:phase6
+          npm run check:phase7
+          npm run check:phase8
+          npm run check:phase9
+          npm run check:production
+          npm run check:dashboard
+      - run: npm audit --omit=dev --audit-level=high
+
+  deploy:
+    needs: ci
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARED_VERSION: 2026.7.2
+      TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+      VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+      VPS_APP_DIR: ${{ vars.VPS_APP_DIR || '/opt/logmind' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cloudflared
+        run: |
+          curl -fsSLo /tmp/cloudflared.deb "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64.deb"
+          sudo dpkg -i /tmp/cloudflared.deb
+          cloudflared --version
+      - name: Configure SSH
+        run: |
+          test -n "$TUNNEL_SERVICE_TOKEN_ID"
+          test -n "$TUNNEL_SERVICE_TOKEN_SECRET"
+          test -n "$VPS_HOST"
+          test -n "$VPS_USER"
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_KNOWN_HOSTS"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host $VPS_HOST
+            HostName $VPS_HOST
+            User $VPS_USER
+            Port $VPS_PORT
+            IdentityFile ~/.ssh/id_ed25519
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ProxyCommand cloudflared access ssh --hostname %h
+          EOF
+          chmod 600 ~/.ssh/config ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+      - name: Create release archive
+        run: git archive --format=tar.gz --output=logmind.tar.gz "$GITHUB_SHA"
+      - name: Upload release
+        run: scp -o BatchMode=yes logmind.tar.gz "$VPS_HOST:/tmp/logmind-$GITHUB_SHA.tar.gz"
+      - name: Activate release
+        run: |
+          ssh -o BatchMode=yes "$VPS_HOST" "mkdir -p '$VPS_APP_DIR/releases/$GITHUB_SHA' && tar -xzf '/tmp/logmind-$GITHUB_SHA.tar.gz' -C '$VPS_APP_DIR/releases/$GITHUB_SHA' && rm -f '/tmp/logmind-$GITHUB_SHA.tar.gz' && chmod +x '$VPS_APP_DIR/releases/$GITHUB_SHA/deploy/deploy-release.sh' && '$VPS_APP_DIR/releases/$GITHUB_SHA/deploy/deploy-release.sh' '$VPS_APP_DIR' '$GITHUB_SHA'"

@@ -43,7 +43,7 @@ scripts/               Runnable self-checks
 
 ## Requirements
 
-- Node.js 22 or newer
+- Node.js 22 LTS (`.nvmrc` is included)
 - npm 10 or newer
 - Docker with Docker Compose
 
@@ -120,6 +120,8 @@ Browser logging from the dashboard is optional:
 NEXT_PUBLIC_LOGMIND_API_URL=http://localhost:3000
 NEXT_PUBLIC_LOGMIND_CLIENT_KEY=
 ```
+
+Keep `TRUST_PROXY_HOPS=0` when the API is exposed directly. Set it to the exact number of trusted reverse proxies only when direct access to the API is blocked.
 
 ## Log Ingestion
 
@@ -205,7 +207,7 @@ Incident analysis is requested asynchronously through `POST /incidents/:incident
 5. Open Incidents in the dashboard and inspect the generated fingerprint group.
 6. Generate the AI analysis from the incident detail page.
 
-The full containerized Phase 10 demo services are not implemented yet. Current Compose starts PostgreSQL, MongoDB, and Redis only.
+The Phase 10 demo services are not implemented yet. Local Compose starts only infrastructure; `compose.production.yml` runs the LogMind applications and infrastructure on a VPS.
 
 ## Verification
 
@@ -219,18 +221,62 @@ Focused self-checks are available as `check:phase2` through `check:phase9`.
 
 ## Production
 
-Production Dockerfiles are available under each application directory. Apply migrations before starting the API:
+Production deployment uses `compose.production.yml`, Caddy, Cloudflare Tunnel, and `.github/workflows/deploy.yml`. PostgreSQL, MongoDB, and Redis are private to the Compose network; Caddy binds only to `127.0.0.1:80` for the local tunnel origin.
 
-```powershell
-npm run prisma:migrate:deploy
+Prepare an Ubuntu VPS with Docker Engine and the Compose plugin, then create the application directory:
+
+```bash
+sudo mkdir -p /opt/logmind/releases
+sudo chown -R "$USER":"$USER" /opt/logmind
+```
+
+Copy `.env.production.example` to `/opt/logmind/.env.production` and replace every placeholder. Use URL-safe secrets, for example `openssl rand -hex 32`. Publish the application hostname through Cloudflare Tunnel to `http://localhost:80`, then configure:
+
+```env
+SITE_ADDRESS=:80
+PUBLIC_API_URL=https://logmind.example.com/backend
+CORS_ORIGIN=https://logmind.example.com
+```
+
+Add these GitHub production environment secrets:
+
+- `VPS_HOST`: VPS IP or hostname
+- `VPS_USER`: SSH user with Docker access
+- `VPS_SSH_KEY`: private deployment key without a passphrase
+- `VPS_KNOWN_HOSTS`: the VPS SSH host public key in known-hosts format
+- `CF_ACCESS_CLIENT_ID`: Cloudflare Access service token client ID
+- `CF_ACCESS_CLIENT_SECRET`: Cloudflare Access service token client secret
+
+Optional GitHub environment variables:
+
+- `VPS_PORT`: defaults to `22`
+- `VPS_APP_DIR`: defaults to `/opt/logmind`
+
+A push to `main`, or a manual run of **CI and Deploy**, runs checks, connects through Cloudflare Access, uploads the release, applies Prisma migrations, and starts the production stack. GitHub Actions secrets are only exposed when explicitly referenced by a workflow, and deployment concurrency is limited to one run at a time.
+
+After deployment:
+
+- Dashboard: `https://logmind.example.com`
+- API health: `https://logmind.example.com/backend/health`
+- Containers: `docker compose --project-name logmind -f /opt/logmind/current/compose.production.yml ps`
+- Logs: `docker compose --project-name logmind -f /opt/logmind/current/compose.production.yml logs -f api worker`
+
+Create a server API key from the dashboard, set it as `LOGMIND_API_KEY` in `/opt/logmind/.env.production`, then rerun the deployment workflow to activate Docker log forwarding. Set the client key and rebuild only when browser logging is required.
+
+For a manual deployment from a checked-out release, apply migrations before starting the stack:
+
+```bash
+docker compose --env-file .env.production -f compose.production.yml build
+docker compose --env-file .env.production -f compose.production.yml run --rm api npx prisma migrate deploy
+docker compose --env-file .env.production -f compose.production.yml up -d --wait
 ```
 
 Production hardening includes environment validation, CORS allow-listing, security headers, body limits, ingestion/auth rate limits, failed BullMQ job retention, HTTP-only dashboard sessions, and MongoDB TTL indexes.
 
-Swagger is disabled in production unless `ENABLE_SWAGGER=true`. Terminate TLS at the platform or reverse proxy and store all credentials in the deployment secret manager.
+Swagger is disabled in production unless `ENABLE_SWAGGER=true`. Cloudflare terminates public HTTPS; Caddy serves HTTP only on the tunnel origin.
 
 ## Current MVP
 
 Implemented: API, worker, Docker agent, dashboard, Express middleware, frontend SDK, authentication, projects, API keys, ingestion, search, fingerprinting, incidents, AI analysis, and dashboard summaries.
 
-Remaining for the full demo: containerize all services in one Compose file and add demo auth, payment, and order services.
+Remaining for the full demo: add demo auth, payment, and order services.
