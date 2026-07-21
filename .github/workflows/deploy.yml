@@ -68,6 +68,12 @@ jobs:
           test -n "$VPS_USER"
           test -n "$VPS_SSH_KEY"
           test -n "$VPS_KNOWN_HOSTS"
+          access_client_id=$(printf '%s' "$TUNNEL_SERVICE_TOKEN_ID" | tr -d '\r\n')
+          access_client_secret=$(printf '%s' "$TUNNEL_SERVICE_TOKEN_SECRET" | tr -d '\r\n')
+          case "$access_client_id" in
+            *.access) ;;
+            *) echo "CF_ACCESS_CLIENT_ID must end in .access" >&2; exit 1 ;;
+          esac
           install -m 700 -d ~/.ssh
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/id_ed25519
           printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
@@ -79,7 +85,7 @@ jobs:
             IdentityFile ~/.ssh/id_ed25519
             IdentitiesOnly yes
             StrictHostKeyChecking yes
-            ProxyCommand cloudflared access ssh --hostname %h --service-token-id $TUNNEL_SERVICE_TOKEN_ID --service-token-secret $TUNNEL_SERVICE_TOKEN_SECRET
+            ProxyCommand cloudflared access ssh --hostname %h --service-token-id $access_client_id --service-token-secret $access_client_secret
           EOF
           chmod 600 ~/.ssh/config ~/.ssh/id_ed25519 ~/.ssh/known_hosts
       - name: Create release archive
