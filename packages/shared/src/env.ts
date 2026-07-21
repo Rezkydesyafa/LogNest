@@ -11,6 +11,7 @@ export function validateRuntimeEnv(input: Record<string, unknown>) {
   env.AI_PROVIDER_MODE = stringValue(env.AI_PROVIDER_MODE) || 'mock';
   env.AUTH_RATE_LIMIT_PER_MINUTE = positiveNumber(env.AUTH_RATE_LIMIT_PER_MINUTE, 20);
   env.INGEST_RATE_LIMIT_PER_MINUTE = positiveNumber(env.INGEST_RATE_LIMIT_PER_MINUTE, 300);
+  env.TRUST_PROXY_HOPS = nonNegativeInteger(env.TRUST_PROXY_HOPS, 0);
 
   if (nodeEnv === 'production') {
     for (const key of REQUIRED_IN_PRODUCTION) {
@@ -36,4 +37,9 @@ function stringValue(value: unknown) {
 function positiveNumber(value: unknown, fallback: number) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function nonNegativeInteger(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }

@@ -7,31 +7,31 @@ const AI_ANALYSIS_RETENTION_SECONDS = 60 * 60 * 24 * 90;
   versionKey: false,
 })
 export class AiAnalysisResult {
-  @Prop({ required: true, index: true })
+  @Prop({ type: String, required: true, index: true })
   incidentId!: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ type: String, required: true, index: true })
   projectId!: string;
 
-  @Prop({ required: true })
+  @Prop({ type: String, required: true })
   provider!: string;
 
-  @Prop({ required: true })
+  @Prop({ type: String, required: true })
   model!: string;
 
-  @Prop({ required: true, enum: ['success', 'failed'], index: true })
+  @Prop({ type: String, required: true, enum: ['success', 'failed'], index: true })
   status!: 'success' | 'failed';
 
   @Prop({ type: Object, required: true })
   inputSnapshot!: Record<string, unknown>;
 
-  @Prop()
+  @Prop({ type: String })
   prompt?: string;
 
   @Prop({ type: Object })
   output?: Record<string, unknown>;
 
-  @Prop()
+  @Prop({ type: String })
   error?: string;
 }
 

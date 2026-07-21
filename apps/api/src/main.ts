@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -16,20 +17,58 @@ const { json, urlencoded } = require('express') as {
 };
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true, bodyParser: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+    bodyParser: false,
+  });
   const config = app.get(ConfigService);
   const logger = app.get(PinoLogger);
   const isProduction = config.get<string>('NODE_ENV') === 'production';
+  const trustProxyHops = config.get<number>('TRUST_PROXY_HOPS') ?? 0;
 
   app.useLogger(logger);
+  if (trustProxyHops > 0) app.set('trust proxy', trustProxyHops);
   app.use(securityHeaders(isProduction));
   app.use(json({ limit: config.get<string>('REQUEST_BODY_LIMIT') ?? '1mb' }));
-  app.use(urlencoded({ extended: false, limit: config.get<string>('REQUEST_BODY_LIMIT') ?? '1mb' }));
+  app.use(
+    urlencoded({
+      extended: false,
+      limit: config.get<string>('REQUEST_BODY_LIMIT') ?? '1mb',
+    }),
+  );
   app.enableCors(corsOptions(config));
-  app.use('/auth/login', createRateLimit({ name: 'auth', windowMs: 60_000, max: config.get<number>('AUTH_RATE_LIMIT_PER_MINUTE') ?? 20 }));
-  app.use('/auth/register', createRateLimit({ name: 'auth', windowMs: 60_000, max: config.get<number>('AUTH_RATE_LIMIT_PER_MINUTE') ?? 20 }));
-  app.use('/logs/ingest', createRateLimit({ name: 'ingest', windowMs: 60_000, max: config.get<number>('INGEST_RATE_LIMIT_PER_MINUTE') ?? 300 }));
-  app.use('/logs/frontend', createRateLimit({ name: 'ingest', windowMs: 60_000, max: config.get<number>('INGEST_RATE_LIMIT_PER_MINUTE') ?? 300 }));
+  app.use(
+    '/auth/login',
+    createRateLimit({
+      name: 'auth',
+      windowMs: 60_000,
+      max: config.get<number>('AUTH_RATE_LIMIT_PER_MINUTE') ?? 20,
+    }),
+  );
+  app.use(
+    '/auth/register',
+    createRateLimit({
+      name: 'auth',
+      windowMs: 60_000,
+      max: config.get<number>('AUTH_RATE_LIMIT_PER_MINUTE') ?? 20,
+    }),
+  );
+  app.use(
+    '/logs/ingest',
+    createRateLimit({
+      name: 'ingest',
+      windowMs: 60_000,
+      max: config.get<number>('INGEST_RATE_LIMIT_PER_MINUTE') ?? 300,
+    }),
+  );
+  app.use(
+    '/logs/frontend',
+    createRateLimit({
+      name: 'ingest',
+      windowMs: 60_000,
+      max: config.get<number>('INGEST_RATE_LIMIT_PER_MINUTE') ?? 300,
+    }),
+  );
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
   app.useGlobalFilters(new GlobalExceptionFilter(logger));
   app.useGlobalInterceptors(
@@ -46,7 +85,10 @@ async function bootstrap() {
         .setDescription('Centralized logging and incident platform API')
         .setVersion('0.1.0')
         .addBearerAuth()
-        .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'api-key')
+        .addApiKey(
+          { type: 'apiKey', name: 'x-api-key', in: 'header' },
+          'api-key',
+        )
         .build(),
     );
     SwaggerModule.setup('docs', app, document, {
@@ -63,13 +105,20 @@ async function bootstrap() {
 void bootstrap();
 
 function securityHeaders(isProduction: boolean) {
-  return (_request: unknown, response: { setHeader(name: string, value: string): void }, next: () => void) => {
+  return (
+    _request: unknown,
+    response: { setHeader(name: string, value: string): void },
+    next: () => void,
+  ) => {
     response.setHeader('x-content-type-options', 'nosniff');
     response.setHeader('x-frame-options', 'DENY');
     response.setHeader('referrer-policy', 'no-referrer');
 
     if (isProduction) {
-      response.setHeader('strict-transport-security', 'max-age=15552000; includeSubDomains');
+      response.setHeader(
+        'strict-transport-security',
+        'max-age=15552000; includeSubDomains',
+      );
     }
 
     next();
@@ -83,8 +132,15 @@ function corsOptions(config: ConfigService) {
     .filter(Boolean);
 
   return {
-    origin: origins.length ? origins : config.get<string>('NODE_ENV') !== 'production',
+    origin: origins.length
+      ? origins
+      : config.get<string>('NODE_ENV') !== 'production',
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['authorization', 'content-type', 'x-api-key', 'x-request-id'],
+    allowedHeaders: [
+      'authorization',
+      'content-type',
+      'x-api-key',
+      'x-request-id',
+    ],
   };
 }

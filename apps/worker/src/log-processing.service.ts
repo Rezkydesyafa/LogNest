@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
-import { IncidentEventType, IncidentSeverity } from '@prisma/client';
+import { IncidentEventType, IncidentSeverity, IncidentStatus } from '@prisma/client';
 import { Collection, Connection, Types } from 'mongoose';
 import {
   generateFingerprint,
@@ -10,6 +10,7 @@ import {
   RAW_LOG_COLLECTION,
   RawLog,
   RedisService,
+  triggeredIncidentSeverity,
 } from '../../../packages/shared/src';
 
 type LogProcessingJob = {
@@ -87,6 +88,8 @@ export class LogProcessingService implements OnModuleInit {
             this.fiveMinutesMs,
           )
         : 0;
+    const severity = triggeredIncidentSeverity(count10m, fatalCount5m);
+    if (!severity) return;
 
     await this.upsertIncident({
       projectId: rawLog.projectId,
@@ -94,7 +97,7 @@ export class LogProcessingService implements OnModuleInit {
       rawLogId: job.rawLogId,
       fingerprint: parsed.fingerprint,
       title: parsed.normalizedMessage.slice(0, 160),
-      severity: this.severity(count10m, fatalCount5m),
+      severity,
       count10m,
       timestamp: rawLog.timestamp,
     });
@@ -147,6 +150,7 @@ export class LogProcessingService implements OnModuleInit {
     }
 
     const severityChanged = existing.severity !== input.severity;
+    const reopened = existing.status === IncidentStatus.RESOLVED;
     const incident = await this.prisma.incident.update({
       where: { id: existing.id },
       data: {
@@ -155,27 +159,22 @@ export class LogProcessingService implements OnModuleInit {
         occurrenceCount: input.count10m,
         lastSeenAt: input.timestamp,
         lastRawLogId: input.rawLogId,
-        resolvedAt: null,
+        ...(reopened ? { status: IncidentStatus.OPEN, resolvedAt: null } : {}),
       },
     });
 
     await this.prisma.incidentEvent.create({
       data: {
         incidentId: incident.id,
-        type: IncidentEventType.UPDATED,
-        message: severityChanged
-          ? `Severity changed from ${existing.severity.toLowerCase()} to ${input.severity.toLowerCase()}`
-          : 'Incident occurrence updated',
+        type: reopened ? IncidentEventType.STATUS_CHANGED : IncidentEventType.UPDATED,
+        message: reopened
+          ? 'Incident reopened after the fingerprint threshold was reached again'
+          : severityChanged
+            ? `Severity changed from ${existing.severity.toLowerCase()} to ${input.severity.toLowerCase()}`
+            : 'Incident occurrence updated',
         metadata: { count10m: input.count10m, rawLogId: input.rawLogId },
       },
     });
-  }
-
-  private severity(count10m: number, fatalCount5m: number) {
-    if (fatalCount5m >= 3) return IncidentSeverity.CRITICAL;
-    if (count10m >= 5) return IncidentSeverity.HIGH;
-    if (count10m >= 3) return IncidentSeverity.MEDIUM;
-    return IncidentSeverity.LOW;
   }
 
   private rawLogs(): Collection<RawLog> {

@@ -12,34 +12,34 @@ const THIRTY_DAYS_SECONDS = 60 * 60 * 24 * 30;
   versionKey: false,
 })
 export class RawLog {
-  @Prop({ required: true, index: true })
+  @Prop({ type: String, required: true, index: true })
   projectId!: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ type: String, required: true, index: true })
   serviceId!: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ type: String, required: true, index: true })
   apiKeyId!: string;
 
-  @Prop({ required: true, enum: LOG_SOURCE_TYPES, index: true })
+  @Prop({ type: String, required: true, enum: LOG_SOURCE_TYPES, index: true })
   sourceType!: LogSourceType;
 
-  @Prop({ required: true, index: true })
+  @Prop({ type: String, required: true, index: true })
   serviceName!: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ type: String, required: true, index: true })
   environment!: string;
 
-  @Prop({ required: true, enum: LOG_LEVELS, index: true })
+  @Prop({ type: String, required: true, enum: LOG_LEVELS, index: true })
   level!: LogLevel;
 
-  @Prop({ required: true })
+  @Prop({ type: String, required: true })
   message!: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ type: Date, required: true, index: true })
   timestamp!: Date;
 
-  @Prop({ index: true })
+  @Prop({ type: String, index: true })
   requestId?: string;
 
   @Prop({ type: Object })
@@ -51,7 +51,7 @@ export class RawLog {
   @Prop({ type: Object })
   metadata?: Record<string, unknown>;
 
-  @Prop()
+  @Prop({ type: String })
   stackTrace?: string;
 }
 
@@ -65,28 +65,28 @@ RawLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: THIRTY_DAYS_SECONDS }
   versionKey: false,
 })
 export class ParsedLog {
-  @Prop({ required: true, index: true })
+  @Prop({ type: String, required: true })
   rawLogId!: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ type: String, required: true, index: true })
   projectId!: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ type: String, required: true, index: true })
   serviceId!: string;
 
-  @Prop({ required: true, enum: LOG_SOURCE_TYPES, index: true })
+  @Prop({ type: String, required: true, enum: LOG_SOURCE_TYPES, index: true })
   sourceType!: LogSourceType;
 
-  @Prop({ required: true, enum: LOG_LEVELS, index: true })
+  @Prop({ type: String, required: true, enum: LOG_LEVELS, index: true })
   level!: LogLevel;
 
-  @Prop({ required: true })
+  @Prop({ type: String, required: true })
   normalizedMessage!: string;
 
-  @Prop({ index: true })
+  @Prop({ type: String, index: true })
   fingerprint?: string;
 
-  @Prop({ index: true })
+  @Prop({ type: String, index: true })
   stackTraceHash?: string;
 }
 

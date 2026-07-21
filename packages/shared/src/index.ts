@@ -3,6 +3,7 @@ export * from './database/database.module';
 export * from './database/prisma.service';
 export * from './env';
 export * from './fingerprint';
+export * from './incident-rules';
 export * from './log-storage';
 export * from './logging/pino-logger.service';
 export * from './queue/log-queue.module';
