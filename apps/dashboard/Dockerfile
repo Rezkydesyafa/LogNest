@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 ARG NEXT_PUBLIC_LOGMIND_API_URL
 ARG NEXT_PUBLIC_LOGMIND_CLIENT_KEY
@@ -11,7 +11,7 @@ RUN npm ci
 COPY . .
 RUN npm run build:frontend-logger && npm run build:dashboard
 
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production PORT=3001 HOSTNAME=0.0.0.0
 COPY --from=build /app/apps/dashboard/.next/standalone ./
