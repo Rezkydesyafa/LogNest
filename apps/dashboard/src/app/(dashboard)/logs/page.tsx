@@ -1,23 +1,20 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { SearchIcon } from "lucide-react";
-import { api, formatDate, queryString } from "@/lib/api";
-import type { Log, Page, Service } from "@/lib/types";
-import { PaginationControls } from "@/components/pagination-controls";
-import {
-  ErrorState,
-  PageHeader,
-  PageLoading,
-  ProjectRequired,
-} from "@/components/page-state";
-import { useProject } from "@/components/project-context";
-import { StatusBadge } from "@/components/status-badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { SearchIcon } from 'lucide-react';
+import { api, formatDate, queryString } from '@/lib/api';
+import type { Log, Page, Service } from '@/lib/types';
+import { PaginationControls } from '@/components/pagination-controls';
+import { ErrorState, PageHeader, PageLoading, ProjectRequired } from '@/components/page-state';
+import { useProject } from '@/components/project-context';
+import { StatusBadge } from '@/components/status-badge';
+import { LiveIndicator } from '@/components/live-indicator';
+import { useProjectEvents } from '@/hooks/use-project-events';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -25,22 +22,9 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/select';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 type Filters = {
   keyword?: string;
@@ -56,27 +40,33 @@ type Filters = {
 
 export default function LogsPage() {
   const { projectId, loading } = useProject();
+  const client = useQueryClient();
+  const [live, setLive] = useState(true);
   const initialService =
-    typeof window === "undefined"
-      ? ""
-      : (new URLSearchParams(window.location.search).get("serviceId") ?? "");
+    typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get('serviceId') ?? '');
   const [filters, setFilters] = useState<Filters>({
     serviceId: initialService,
   });
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Log>();
   const services = useQuery({
-    queryKey: ["services", projectId],
+    queryKey: ['services', projectId],
     queryFn: () => api<Service[]>(`/projects/${projectId}/services`),
     enabled: Boolean(projectId),
   });
   const logs = useQuery({
-    queryKey: ["logs", projectId, filters, page],
+    queryKey: ['logs', projectId, filters, page],
     queryFn: () =>
       api<Page<Log>>(
         `/logs${queryString({ projectId, ...filters, statusCode: filters.statusCode ? Number(filters.statusCode) : undefined, page, limit: 25 })}`,
       ),
     enabled: Boolean(projectId),
+  });
+
+  // Live tail. The worker publishes one event per processed error log, and only the first
+  // page is refreshed: paging back through history should not jump under the reader.
+  const { connected } = useProjectEvents(live ? projectId : undefined, () => {
+    if (page === 1) void client.invalidateQueries({ queryKey: ['logs', projectId] });
   });
 
   if (loading) return <PageLoading />;
@@ -87,6 +77,14 @@ export default function LogsPage() {
       <PageHeader
         title="Logs"
         description="Search raw Docker, API, worker, manual, and frontend logs."
+        action={
+          <LiveIndicator
+            live={live}
+            connected={connected}
+            onToggle={() => setLive((value) => !value)}
+            pausedHint={page > 1 ? 'Paused while paging through history' : undefined}
+          />
+        }
       />
       <Card className="mb-5">
         <CardContent>
@@ -99,7 +97,7 @@ export default function LogsPage() {
                 Object.fromEntries(
                   Array.from(data.entries()).map(([key, value]) => [
                     key,
-                    value === "all" ? "" : String(value),
+                    value === 'all' ? '' : String(value),
                   ]),
                 ),
               );
@@ -118,10 +116,7 @@ export default function LogsPage() {
               </Field>
               <Field>
                 <FieldLabel>Service</FieldLabel>
-                <Select
-                  name="serviceId"
-                  defaultValue={filters.serviceId || "all"}
-                >
+                <Select name="serviceId" defaultValue={filters.serviceId || 'all'}>
                   <SelectTrigger>
                     <SelectValue placeholder="All services" />
                   </SelectTrigger>
@@ -145,14 +140,7 @@ export default function LogsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {[
-                        "all",
-                        "docker",
-                        "api",
-                        "frontend",
-                        "worker",
-                        "manual",
-                      ].map((value) => (
+                      {['all', 'docker', 'api', 'frontend', 'worker', 'manual'].map((value) => (
                         <SelectItem key={value} value={value}>
                           {value}
                         </SelectItem>
@@ -169,24 +157,18 @@ export default function LogsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {["all", "debug", "info", "warn", "error", "fatal"].map(
-                        (value) => (
-                          <SelectItem key={value} value={value}>
-                            {value}
-                          </SelectItem>
-                        ),
-                      )}
+                      {['all', 'debug', 'info', 'warn', 'error', 'fatal'].map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {value}
+                        </SelectItem>
+                      ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
               </Field>
               <Field>
                 <FieldLabel htmlFor="environment">Environment</FieldLabel>
-                <Input
-                  id="environment"
-                  name="environment"
-                  placeholder="production"
-                />
+                <Input id="environment" name="environment" placeholder="production" />
               </Field>
               <Field>
                 <FieldLabel htmlFor="path">API path</FieldLabel>
@@ -194,13 +176,7 @@ export default function LogsPage() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="statusCode">Status code</FieldLabel>
-                <Input
-                  id="statusCode"
-                  name="statusCode"
-                  type="number"
-                  min="100"
-                  max="599"
-                />
+                <Input id="statusCode" name="statusCode" type="number" min="100" max="599" />
               </Field>
               <Field>
                 <FieldLabel htmlFor="from">From</FieldLabel>
@@ -231,27 +207,17 @@ export default function LogsPage() {
               </TableHeader>
               <TableBody>
                 {(logs.data?.items ?? []).map((log) => (
-                  <TableRow
-                    key={log.id}
-                    className="cursor-pointer"
-                    onClick={() => setSelected(log)}
-                  >
-                    <TableCell className="whitespace-nowrap">
-                      {formatDate(log.timestamp)}
-                    </TableCell>
+                  <TableRow key={log.id} className="cursor-pointer" onClick={() => setSelected(log)}>
+                    <TableCell className="whitespace-nowrap">{formatDate(log.timestamp)}</TableCell>
                     <TableCell>
                       <StatusBadge value={log.level} />
                     </TableCell>
                     <TableCell>
                       {log.serviceName}
-                      <div className="text-xs text-muted-foreground">
-                        {log.environment}
-                      </div>
+                      <div className="text-xs text-muted-foreground">{log.environment}</div>
                     </TableCell>
                     <TableCell>{log.sourceType}</TableCell>
-                    <TableCell className="max-w-xl truncate font-mono text-xs">
-                      {log.message}
-                    </TableCell>
+                    <TableCell className="max-w-xl truncate font-mono text-xs">{log.message}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -272,17 +238,12 @@ export default function LogsPage() {
           </div>
         </CardContent>
       </Card>
-      <Sheet
-        open={Boolean(selected)}
-        onOpenChange={(open) => !open && setSelected(undefined)}
-      >
+      <Sheet open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(undefined)}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
           <SheetHeader>
             <SheetTitle>Log details</SheetTitle>
             <SheetDescription>
-              {selected
-                ? `${selected.serviceName} · ${formatDate(selected.timestamp)}`
-                : "Raw log payload"}
+              {selected ? `${selected.serviceName} · ${formatDate(selected.timestamp)}` : 'Raw log payload'}
             </SheetDescription>
           </SheetHeader>
           {selected && (
@@ -293,9 +254,7 @@ export default function LogsPage() {
               </div>
               <section>
                 <h3 className="mb-1 text-sm font-medium">Message</h3>
-                <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
-                  {selected.message}
-                </pre>
+                <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">{selected.message}</pre>
               </section>
               {selected.stackTrace && (
                 <section>
