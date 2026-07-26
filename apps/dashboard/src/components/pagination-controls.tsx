@@ -4,7 +4,7 @@ import {
   PaginationItem,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
+} from '@/components/ui/pagination';
 
 export function PaginationControls({
   page,

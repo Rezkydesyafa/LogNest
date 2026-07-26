@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { initLogMindFrontend } from "@logmind/frontend-logger";
+import { useEffect } from 'react';
+import { initLogMindFrontend } from '@logmind/frontend-logger';
 
 export function FrontendLogger() {
   useEffect(() => {
@@ -10,7 +10,7 @@ export function FrontendLogger() {
     if (!apiKey || !baseUrl) return;
     const client = initLogMindFrontend({
       apiKey,
-      serviceName: "frontend-dashboard",
+      serviceName: 'frontend-dashboard',
       environment: process.env.NODE_ENV,
       endpoint: `${baseUrl}/logs/frontend`,
     });

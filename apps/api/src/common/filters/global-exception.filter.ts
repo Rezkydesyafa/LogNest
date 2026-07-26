@@ -1,10 +1,4 @@
-import {
-  ArgumentsHost,
-  Catch,
-  ExceptionFilter,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
 import { PinoLogger, REQUEST_ID_HEADER } from '../../../../../packages/shared/src';
 
 @Catch()
@@ -16,14 +10,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest();
     const response = ctx.getResponse();
     const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+      exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const error =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : { message: 'Internal server error' };
+      exception instanceof HttpException ? exception.getResponse() : { message: 'Internal server error' };
 
     const requestId = request.headers[REQUEST_ID_HEADER];
     this.logger.error(

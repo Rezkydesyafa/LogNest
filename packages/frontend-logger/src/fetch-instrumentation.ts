@@ -1,6 +1,8 @@
 import type { FrontendLogPayload } from './sdk';
 
-type SendLog = (payload: Omit<FrontendLogPayload, 'serviceName' | 'environment' | 'timestamp' | 'frontend'>) => void;
+type SendLog = (
+  payload: Omit<FrontendLogPayload, 'serviceName' | 'environment' | 'timestamp' | 'frontend'>,
+) => void;
 
 export function setupFetchInstrumentation(windowRef: Window, send: SendLog) {
   const originalFetch = windowRef.fetch?.bind(windowRef);

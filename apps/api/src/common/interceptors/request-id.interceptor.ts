@@ -10,8 +10,8 @@ export class RequestIdInterceptor implements NestInterceptor {
     const response = context.switchToHttp().getResponse();
     const incomingRequestId = request.headers[REQUEST_ID_HEADER];
     const requestId = Array.isArray(incomingRequestId)
-      ? incomingRequestId[0] ?? randomUUID()
-      : incomingRequestId ?? randomUUID();
+      ? (incomingRequestId[0] ?? randomUUID())
+      : (incomingRequestId ?? randomUUID());
 
     request.headers[REQUEST_ID_HEADER] = requestId;
     response.setHeader(REQUEST_ID_HEADER, requestId);
