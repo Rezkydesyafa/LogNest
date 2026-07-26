@@ -17,7 +17,7 @@ jobs:
     name: Verify release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -47,7 +47,7 @@ jobs:
       VPS_PORT: ${{ vars.VPS_PORT || '22' }}
       VPS_APP_DIR: ${{ vars.VPS_APP_DIR || '/opt/logmind' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install cloudflared
         run: |
           curl -fsSLo /tmp/cloudflared.deb "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64.deb"
