@@ -1,8 +1,9 @@
 import { PassThrough, Readable } from 'stream';
 import Docker from 'dockerode';
 import { environmentFromLabels, serviceNameFromLabels } from './labels';
-import { LineBuffer } from './line-buffer';
-import { LogMindClient } from './logmind-client';
+import { LineBuffer, MultilineBuffer } from './line-buffer';
+import { LogBatcher } from './log-batcher';
+import { DockerLogPayload } from './logmind-client';
 
 type ContainerInfo = {
   id: string;
@@ -10,12 +11,13 @@ type ContainerInfo = {
   image: string;
   labels: Record<string, string | undefined>;
   composeProject?: string;
+  defaultEnvironment: string;
 };
 
 export class LogStreamer {
   constructor(
     private readonly docker: Docker,
-    private readonly client: LogMindClient,
+    private readonly batcher: LogBatcher,
   ) {}
 
   async stream(container: Docker.Container, info: ContainerInfo) {
@@ -42,26 +44,34 @@ export class LogStreamer {
 
   private consume(stream: Readable, level: 'info' | 'error', info: ContainerInfo) {
     const buffer = new LineBuffer();
+    const multiline = new MultilineBuffer();
     stream.on('data', (chunk) => {
       for (const line of buffer.push(chunk)) {
-        void this.sendLine(line, level, info);
+        for (const entry of multiline.push(line)) this.enqueue(entry, level, info);
       }
     });
     stream.on('end', () => {
       for (const line of buffer.flush()) {
-        void this.sendLine(line, level, info);
+        for (const entry of multiline.push(line)) this.enqueue(entry, level, info);
       }
+      for (const entry of multiline.flush()) this.enqueue(entry, level, info);
     });
     stream.on('error', () => undefined);
   }
 
-  private sendLine(line: string, level: 'info' | 'error', info: ContainerInfo) {
-    return this.client.send({
+  private enqueue(line: string, level: 'info' | 'error', info: ContainerInfo) {
+    this.batcher.add(this.toPayload(line, level, info));
+  }
+
+  private toPayload(line: string, level: 'info' | 'error', info: ContainerInfo): DockerLogPayload {
+    const stackTrace = line.includes('\n') ? line : undefined;
+    return {
       sourceType: 'docker',
       serviceName: serviceNameFromLabels(info.labels, info.name),
-      environment: environmentFromLabels(info.labels),
+      environment: environmentFromLabels(info.labels, info.defaultEnvironment),
       level,
-      message: line,
+      message: stackTrace ? line.split('\n').at(-1) || line : line,
+      stackTrace,
       timestamp: new Date().toISOString(),
       metadata: {
         container: {
@@ -73,6 +83,6 @@ export class LogStreamer {
           stream: level === 'error' ? 'stderr' : 'stdout',
         },
       },
-    });
+    };
   }
 }
