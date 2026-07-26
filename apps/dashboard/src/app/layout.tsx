@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
-import { Providers } from "@/components/providers";
-import "./globals.css";
+import type { Metadata } from 'next';
+import { Providers } from '@/components/providers';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "LogMind AI",
-  description: "Centralized logs and incident operations",
+  title: 'LogMind AI',
+  description: 'Centralized logs and incident operations',
 };
 
 export default function RootLayout({
@@ -13,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full">
         <Providers>{children}</Providers>
       </body>
