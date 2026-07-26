@@ -102,7 +102,8 @@ export class OpenAiProvider implements AiProvider {
 
     return {
       summary: `${serviceName} mengalami error${status} berulang${endpoint}.`,
-      possibleCause: input.incident.title || 'Kemungkinan terjadi error berulang dengan fingerprint yang sama.',
+      possibleCause:
+        input.incident.title || 'Kemungkinan terjadi error berulang dengan fingerprint yang sama.',
       impact: 'User mungkin mengalami kegagalan pada alur yang bergantung pada service ini.',
       suggestedActions: [
         'Periksa sample log dan stack trace terbaru.',
