@@ -1,4 +1,4 @@
-name: CI and Deploy
+name: Deploy
 
 on:
   push:
@@ -13,7 +13,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  ci:
+  verify:
+    name: Verify release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,23 +24,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run prisma:generate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run test:integration
       - run: npm run build
-      - name: Run self-checks
-        run: |
-          npm run check:phase2
-          npm run check:phase3
-          npm run check:phase4
-          npm run check:phase5
-          npm run check:phase6
-          npm run check:phase7
-          npm run check:phase8
-          npm run check:phase9
-          npm run check:production
-          npm run check:dashboard
       - run: npm audit --omit=dev --audit-level=high
 
   deploy:
-    needs: ci
+    needs: verify
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
