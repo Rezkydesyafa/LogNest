@@ -1,3 +1,18 @@
+x-demo-service: &demo-service
+  build:
+    context: .
+    dockerfile: apps/demo-services/Dockerfile
+  restart: unless-stopped
+
+x-demo-environment: &demo-environment
+  NODE_ENV: production
+  PORT: '4000'
+  DEMO_ENVIRONMENT: development
+  DEMO_ERROR_RATE: '${DEMO_ERROR_RATE:-0.25}'
+  DEMO_TRAFFIC_INTERVAL_MS: '${DEMO_TRAFFIC_INTERVAL_MS:-4000}'
+  LOGMIND_API_KEY: '${LOGMIND_API_KEY:-}'
+  LOGMIND_INGEST_ENDPOINT: '${LOGMIND_INGEST_ENDPOINT:-http://host.docker.internal:3000/logs/ingest}'
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,11 +21,11 @@ services:
       POSTGRES_PASSWORD: logmind
       POSTGRES_DB: logmind
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U logmind -d logmind"]
+      test: ['CMD-SHELL', 'pg_isready -U logmind -d logmind']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -18,11 +33,11 @@ services:
   mongodb:
     image: mongo:7
     ports:
-      - "27017:27017"
+      - '27017:27017'
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -30,14 +45,49 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # Demo services. Started only with `docker compose --profile demo up`, so the default
+  # `npm run docker:up` stays infrastructure-only.
+  demo-auth:
+    <<: *demo-service
+    profiles: ['demo']
+    environment:
+      <<: *demo-environment
+      DEMO_SERVICE: auth
+    labels:
+      logmind.enabled: 'true'
+      logmind.service: demo-auth-service
+      logmind.environment: development
+
+  demo-payment:
+    <<: *demo-service
+    profiles: ['demo']
+    environment:
+      <<: *demo-environment
+      DEMO_SERVICE: payment
+    labels:
+      logmind.enabled: 'true'
+      logmind.service: demo-payment-service
+      logmind.environment: development
+
+  demo-order:
+    <<: *demo-service
+    profiles: ['demo']
+    environment:
+      <<: *demo-environment
+      DEMO_SERVICE: order
+    labels:
+      logmind.enabled: 'true'
+      logmind.service: demo-order-service
+      logmind.environment: development
 
 volumes:
   postgres-data:
