@@ -1,12 +1,13 @@
-"use client";
+'use client';
 
-import { createContext, useContext, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PlusIcon } from "lucide-react";
-import { toast } from "sonner";
-import { api } from "@/lib/api";
-import type { Project } from "@/lib/types";
-import { Button } from "@/components/ui/button";
+import { createContext, useContext, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { PlusIcon } from 'lucide-react';
+import { toast } from 'sonner';
+import { api } from '@/lib/api';
+import { can as canDo, type ProjectAction, type ProjectRole } from '@/lib/permissions';
+import type { Project } from '@/lib/types';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -15,9 +16,9 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+} from '@/components/ui/dialog';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -25,38 +26,35 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
+} from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 
 type ProjectContextValue = {
   projects: Project[];
   project?: Project;
   projectId?: string;
+  /** Role in the selected project, undefined until the project list has loaded. */
+  role?: ProjectRole;
   loading: boolean;
   setProjectId(id: string): void;
+  can(action: ProjectAction): boolean;
 };
 
 const ProjectContext = createContext<ProjectContextValue | null>(null);
-const STORAGE_KEY = "logmind_project_id";
+const STORAGE_KEY = 'logmind_project_id';
 
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [selected, setSelected] = useState<string>(() =>
-    typeof window === "undefined"
-      ? ""
-      : (localStorage.getItem(STORAGE_KEY) ?? ""),
+    typeof window === 'undefined' ? '' : (localStorage.getItem(STORAGE_KEY) ?? ''),
   );
   const projectsQuery = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => api<Project[]>("/projects"),
+    queryKey: ['projects'],
+    queryFn: () => api<Project[]>('/projects'),
   });
-  const projects = useMemo(
-    () => projectsQuery.data ?? [],
-    [projectsQuery.data],
-  );
+  const projects = useMemo(() => projectsQuery.data ?? [], [projectsQuery.data]);
 
-  const projectId = projects.some((item) => item.id === selected)
-    ? selected
-    : projects[0]?.id;
+  const projectId = projects.some((item) => item.id === selected) ? selected : projects[0]?.id;
+  const role = projects.find((item) => item.id === projectId)?.role;
 
   function setProjectId(id: string) {
     localStorage.setItem(STORAGE_KEY, id);
@@ -69,8 +67,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         projects,
         project: projects.find((item) => item.id === projectId),
         projectId,
+        role,
         loading: projectsQuery.isLoading,
         setProjectId,
+        can: (action) => canDo(role, action),
       }}
     >
       {children}
@@ -80,7 +80,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
 
 export function useProject() {
   const value = useContext(ProjectContext);
-  if (!value) throw new Error("useProject must be used within ProjectProvider");
+  if (!value) throw new Error('useProject must be used within ProjectProvider');
   return value;
 }
 
@@ -109,25 +109,21 @@ export function ProjectPicker() {
   );
 }
 
-export function CreateProjectDialog({
-  compact = false,
-}: {
-  compact?: boolean;
-}) {
+export function CreateProjectDialog({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const { setProjectId } = useProject();
   const mutation = useMutation({
     mutationFn: (input: { name: string; description?: string }) =>
-      api<Project>("/projects", {
-        method: "POST",
+      api<Project>('/projects', {
+        method: 'POST',
         body: JSON.stringify(input),
       }),
     onSuccess: async (project) => {
-      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await queryClient.invalidateQueries({ queryKey: ['projects'] });
       setProjectId(project.id);
       setOpen(false);
-      toast.success("Project created");
+      toast.success('Project created');
     },
     onError: (error) => toast.error(error.message),
   });
@@ -135,12 +131,12 @@ export function CreateProjectDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
-          size={compact ? "icon" : "default"}
-          variant={compact ? "outline" : "default"}
+          size={compact ? 'icon' : 'default'}
+          variant={compact ? 'outline' : 'default'}
           title="Create project"
         >
-          <PlusIcon data-icon={compact ? undefined : "inline-start"} />
-          {!compact && "Create project"}
+          <PlusIcon data-icon={compact ? undefined : 'inline-start'} />
+          {!compact && 'Create project'}
           <span className="sr-only">Create project</span>
         </Button>
       </DialogTrigger>
@@ -150,16 +146,14 @@ export function CreateProjectDialog({
             event.preventDefault();
             const data = new FormData(event.currentTarget);
             mutation.mutate({
-              name: String(data.get("name")),
-              description: String(data.get("description") || "") || undefined,
+              name: String(data.get('name')),
+              description: String(data.get('description') || '') || undefined,
             });
           }}
         >
           <DialogHeader>
             <DialogTitle>Create project</DialogTitle>
-            <DialogDescription>
-              Group services, logs, and incidents under one project.
-            </DialogDescription>
+            <DialogDescription>Group services, logs, and incidents under one project.</DialogDescription>
           </DialogHeader>
           <FieldGroup className="py-5">
             <Field>
