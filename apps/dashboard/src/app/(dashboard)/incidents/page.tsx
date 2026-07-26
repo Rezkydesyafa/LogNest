@@ -1,23 +1,20 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { FilterIcon } from "lucide-react";
-import { api, formatDate, queryString } from "@/lib/api";
-import type { Incident, Page, Service } from "@/lib/types";
-import { PaginationControls } from "@/components/pagination-controls";
-import {
-  ErrorState,
-  PageHeader,
-  PageLoading,
-  ProjectRequired,
-} from "@/components/page-state";
-import { useProject } from "@/components/project-context";
-import { StatusBadge } from "@/components/status-badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import Link from 'next/link';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { FilterIcon } from 'lucide-react';
+import { api, formatDate, queryString } from '@/lib/api';
+import type { Incident, Page, Service } from '@/lib/types';
+import { PaginationControls } from '@/components/pagination-controls';
+import { ErrorState, PageHeader, PageLoading, ProjectRequired } from '@/components/page-state';
+import { useProject } from '@/components/project-context';
+import { StatusBadge } from '@/components/status-badge';
+import { LiveIndicator } from '@/components/live-indicator';
+import { useProjectEvents } from '@/hooks/use-project-events';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
 import {
   Select,
   SelectContent,
@@ -25,32 +22,29 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function IncidentsPage() {
   const { projectId, loading } = useProject();
+  const client = useQueryClient();
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [page, setPage] = useState(1);
   const services = useQuery({
-    queryKey: ["services", projectId],
+    queryKey: ['services', projectId],
     queryFn: () => api<Service[]>(`/projects/${projectId}/services`),
     enabled: Boolean(projectId),
   });
   const incidents = useQuery({
-    queryKey: ["incidents", projectId, filters, page],
+    queryKey: ['incidents', projectId, filters, page],
     queryFn: () =>
-      api<Page<Incident>>(
-        `/incidents${queryString({ projectId, ...filters, page, limit: 25 })}`,
-      ),
+      api<Page<Incident>>(`/incidents${queryString({ projectId, ...filters, page, limit: 25 })}`),
     enabled: Boolean(projectId),
+  });
+  // Live feed: the worker publishes on every detection, so the table refreshes itself
+  // instead of the operator hitting reload during an outage.
+  const { connected } = useProjectEvents(projectId, () => {
+    void client.invalidateQueries({ queryKey: ['incidents', projectId] });
   });
   if (loading) return <PageLoading />;
   if (!projectId) return <ProjectRequired />;
@@ -60,6 +54,7 @@ export default function IncidentsPage() {
       <PageHeader
         title="Incidents"
         description="Fingerprint groups created from repeated error patterns."
+        action={<LiveIndicator live connected={connected} />}
       />
       <Card className="mb-5">
         <CardContent>
@@ -72,7 +67,7 @@ export default function IncidentsPage() {
                 Object.fromEntries(
                   Array.from(data.entries()).map(([key, value]) => [
                     key,
-                    value === "all" ? "" : String(value),
+                    value === 'all' ? '' : String(value),
                   ]),
                 ),
               );
@@ -88,13 +83,11 @@ export default function IncidentsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {["all", "OPEN", "ACKNOWLEDGED", "RESOLVED"].map(
-                        (value) => (
-                          <SelectItem key={value} value={value}>
-                            {value.toLowerCase()}
-                          </SelectItem>
-                        ),
-                      )}
+                      {['all', 'OPEN', 'ACKNOWLEDGED', 'RESOLVED'].map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {value.toLowerCase()}
+                        </SelectItem>
+                      ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
@@ -107,13 +100,11 @@ export default function IncidentsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {["all", "LOW", "MEDIUM", "HIGH", "CRITICAL"].map(
-                        (value) => (
-                          <SelectItem key={value} value={value}>
-                            {value.toLowerCase()}
-                          </SelectItem>
-                        ),
-                      )}
+                      {['all', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {value.toLowerCase()}
+                        </SelectItem>
+                      ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
@@ -164,10 +155,7 @@ export default function IncidentsPage() {
                 {(incidents.data?.items ?? []).map((incident) => (
                   <TableRow key={incident.id}>
                     <TableCell>
-                      <Link
-                        className="font-medium hover:underline"
-                        href={`/incidents/${incident.id}`}
-                      >
+                      <Link className="font-medium hover:underline" href={`/incidents/${incident.id}`}>
                         {incident.title}
                       </Link>
                     </TableCell>
@@ -178,12 +166,8 @@ export default function IncidentsPage() {
                     <TableCell>
                       <StatusBadge value={incident.status} />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {incident.occurrenceCount}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {formatDate(incident.lastSeenAt)}
-                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{incident.occurrenceCount}</TableCell>
+                    <TableCell className="whitespace-nowrap">{formatDate(incident.lastSeenAt)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

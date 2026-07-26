@@ -1,6 +1,6 @@
 import Docker from 'dockerode';
 import { AgentConfig } from './config';
-import { isAgentContainer, isLogmindEnabled } from './labels';
+import { isAgentContainer, shouldWatchContainer } from './labels';
 import { LineBuffer } from './line-buffer';
 import { LogStreamer } from './log-streamer';
 
@@ -21,7 +21,7 @@ export class ContainerWatcher {
   async watchExisting() {
     const containers = await this.docker.listContainers({
       all: false,
-      filters: { label: ['logmind.enabled=true'] },
+      ...(this.config.composeProjects.length ? {} : { filters: { label: ['logmind.enabled=true'] } }),
     });
 
     await Promise.all(containers.map((container) => this.watchContainer(container.Id)));
@@ -32,7 +32,7 @@ export class ContainerWatcher {
       filters: {
         type: ['container'],
         event: ['start'],
-        label: ['logmind.enabled=true'],
+        ...(this.config.composeProjects.length ? {} : { label: ['logmind.enabled=true'] }),
       },
     });
 
@@ -59,7 +59,10 @@ export class ContainerWatcher {
       const details = await container.inspect();
       const labels = details.Config?.Labels ?? {};
 
-      if (!isLogmindEnabled(labels) || isAgentContainer(details.Id, labels, this.config.selfContainerId)) {
+      if (
+        !shouldWatchContainer(labels, this.config.composeProjects, this.config.composeServices) ||
+        isAgentContainer(details.Id, labels, this.config.selfContainerId)
+      ) {
         return;
       }
 
@@ -70,6 +73,7 @@ export class ContainerWatcher {
         image: details.Config?.Image ?? '',
         labels,
         composeProject: labels['com.docker.compose.project'],
+        defaultEnvironment: this.config.defaultEnvironment,
       });
     } catch {
       this.watched.delete(containerId);

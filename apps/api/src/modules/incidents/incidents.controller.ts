@@ -1,8 +1,10 @@
 import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { CurrentActor } from '../../common/decorators/current-actor.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ApiDocs, ApiIdParam } from '../../common/swagger/docs';
+import { AuditActor } from '../../common/services/audit.service';
 import { CurrentUserPayload } from '../../common/types/auth.types';
 import { FindIncidentsQueryDto } from './dto/find-incidents-query.dto';
 import { UpdateIncidentStatusDto } from './dto/update-incident-status.dto';
@@ -32,11 +34,11 @@ export class IncidentsController {
   @ApiDocs('Update incident status.')
   @ApiIdParam('incidentId', 'Incident id.')
   updateStatus(
-    @CurrentUser() user: CurrentUserPayload,
+    @CurrentActor() actor: AuditActor,
     @Param('incidentId') incidentId: string,
     @Body() dto: UpdateIncidentStatusDto,
   ) {
-    return this.incidentsService.updateStatus(user.id, incidentId, dto.status);
+    return this.incidentsService.updateStatus(actor, incidentId, dto.status);
   }
 
   @Get(':incidentId/logs')

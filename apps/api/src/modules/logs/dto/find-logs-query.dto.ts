@@ -29,10 +29,18 @@ export class FindLogsQueryDto {
   @IsString()
   environment?: string;
 
-  @ApiPropertyOptional({ example: 'timeout' })
+  @ApiPropertyOptional({
+    example: 'timeout',
+    description: 'Full-text word search over the log message and stack trace.',
+  })
   @IsOptional()
   @IsString()
   keyword?: string;
+
+  @ApiPropertyOptional({ example: 'req_01H8...' })
+  @IsOptional()
+  @IsString()
+  requestId?: string;
 
   @ApiPropertyOptional({ example: '2026-07-08T00:00:00.000Z' })
   @IsOptional()
@@ -50,10 +58,18 @@ export class FindLogsQueryDto {
   @IsInt()
   statusCode?: number;
 
-  @ApiPropertyOptional({ example: '/checkout' })
+  @ApiPropertyOptional({ example: '/checkout', description: 'Matches API paths that start with this value.' })
   @IsOptional()
   @IsString()
   path?: string;
+
+  @ApiPropertyOptional({
+    example: 'https://app.example.com/checkout',
+    description: 'Matches browser page URLs that start with this value.',
+  })
+  @IsOptional()
+  @IsString()
+  pageUrl?: string;
 
   @ApiPropertyOptional({ example: 1, minimum: 1 })
   @IsOptional()

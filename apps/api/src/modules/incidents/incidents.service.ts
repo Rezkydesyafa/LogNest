@@ -1,8 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { IncidentEventType, IncidentStatus, Prisma } from '@prisma/client';
+import { IncidentEventType, IncidentStatus, Prisma, ProjectRole } from '@prisma/client';
 import { Model, Types } from 'mongoose';
 import { ParsedLog, PrismaService, RawLog } from '../../../../../packages/shared/src';
+import { AuditActor, AuditService } from '../../common/services/audit.service';
+import { memberProjectFilter, ProjectAccessService } from '../../common/services/project-access.service';
 import { pagination } from '../../common/utils/pagination';
 import { FindIncidentsQueryDto } from './dto/find-incidents-query.dto';
 
@@ -10,13 +12,15 @@ import { FindIncidentsQueryDto } from './dto/find-incidents-query.dto';
 export class IncidentsService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly access: ProjectAccessService,
+    private readonly audit: AuditService,
     @InjectModel(RawLog.name) private readonly rawLogModel: Model<RawLog>,
     @InjectModel(ParsedLog.name) private readonly parsedLogModel: Model<ParsedLog>,
   ) {}
 
-  async findAll(ownerId: string, query: FindIncidentsQueryDto) {
+  async findAll(userId: string, query: FindIncidentsQueryDto) {
     const { page, limit, skip } = pagination(query.page, query.limit);
-    const where = await this.whereFor(ownerId, query);
+    const where = await this.whereFor(userId, query);
     const [items, total] = await Promise.all([
       this.prisma.incident.findMany({
         where,
@@ -34,11 +38,11 @@ export class IncidentsService {
     return { items, page, limit, total };
   }
 
-  async findOne(ownerId: string, incidentId: string) {
+  async findOne(userId: string, incidentId: string) {
     const incident = await this.prisma.incident.findFirst({
       where: {
         id: incidentId,
-        project: { ownerId },
+        project: memberProjectFilter(userId),
       },
       include: {
         service: true,
@@ -53,8 +57,10 @@ export class IncidentsService {
     return incident;
   }
 
-  async updateStatus(ownerId: string, incidentId: string, status: IncidentStatus) {
-    const incident = await this.findOne(ownerId, incidentId);
+  async updateStatus(actor: AuditActor, incidentId: string, status: IncidentStatus) {
+    const incident = await this.findOne(actor.id!, incidentId);
+    // Changing incident state is an operator action, not a read.
+    await this.access.assert(actor.id!, incident.projectId, ProjectRole.MEMBER);
     const updated = await this.prisma.incident.update({
       where: { id: incident.id },
       data: {
@@ -70,12 +76,20 @@ export class IncidentsService {
         message: `Status changed from ${incident.status.toLowerCase()} to ${status.toLowerCase()}`,
       },
     });
+    await this.audit.record({
+      actor,
+      action: 'incident.status_changed',
+      targetType: 'incident',
+      targetId: incident.id,
+      projectId: incident.projectId,
+      metadata: { from: incident.status, to: status },
+    });
 
     return updated;
   }
 
-  async logs(ownerId: string, incidentId: string, query: FindIncidentsQueryDto) {
-    const incident = await this.findOne(ownerId, incidentId);
+  async logs(userId: string, incidentId: string, query: FindIncidentsQueryDto) {
+    const incident = await this.findOne(userId, incidentId);
     const { page, limit, skip } = pagination(query.page, query.limit);
     const parsed = await this.parsedLogModel
       .find({
@@ -92,7 +106,10 @@ export class IncidentsService {
       .filter((id) => Types.ObjectId.isValid(id))
       .map((id) => new Types.ObjectId(id));
     const [items, total] = await Promise.all([
-      this.rawLogModel.find({ _id: { $in: rawIds } }).sort({ timestamp: -1 }).lean(),
+      this.rawLogModel
+        .find({ _id: { $in: rawIds } })
+        .sort({ timestamp: -1 })
+        .lean(),
       this.parsedLogModel.countDocuments({
         projectId: incident.projectId,
         serviceId: incident.serviceId,
@@ -108,8 +125,8 @@ export class IncidentsService {
     };
   }
 
-  private async whereFor(ownerId: string, query: FindIncidentsQueryDto): Promise<Prisma.IncidentWhereInput> {
-    const projectIds = await this.projectIdsFor(ownerId, query.projectId);
+  private async whereFor(userId: string, query: FindIncidentsQueryDto): Promise<Prisma.IncidentWhereInput> {
+    const projectIds = await this.access.scopeProjectIds(userId, query.projectId);
 
     if (!projectIds.length) {
       return { projectId: '__none__' };
@@ -121,27 +138,5 @@ export class IncidentsService {
       ...(query.status ? { status: query.status } : {}),
       ...(query.severity ? { severity: query.severity } : {}),
     };
-  }
-
-  private async projectIdsFor(ownerId: string, projectId?: string) {
-    if (projectId) {
-      const project = await this.prisma.project.findFirst({
-        where: { id: projectId, ownerId },
-        select: { id: true },
-      });
-
-      if (!project) {
-        throw new NotFoundException('Project not found');
-      }
-
-      return [projectId];
-    }
-
-    const projects = await this.prisma.project.findMany({
-      where: { ownerId },
-      select: { id: true },
-    });
-
-    return projects.map((project) => project.id);
   }
 }

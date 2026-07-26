@@ -1,8 +1,13 @@
+import type { ProjectRole } from './permissions';
+
 export type User = { id: string; email: string; name: string | null };
 export type Project = {
   id: string;
   name: string;
   description?: string;
+  timezone?: string;
+  /** Role the current user holds in this project. Drives which actions the UI offers. */
+  role?: ProjectRole;
   createdAt: string;
 };
 export type Service = {
@@ -16,7 +21,7 @@ export type Service = {
   errorCount: number;
   openIncidentCount?: number;
   criticalIncidentCount?: number;
-  status?: "healthy" | "warning" | "critical" | "stale";
+  status?: 'healthy' | 'warning' | 'critical' | 'stale';
 };
 export type Log = {
   id: string;
@@ -44,9 +49,10 @@ export type Incident = {
   projectId: string;
   serviceId: string;
   title: string;
-  severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
-  status: "OPEN" | "ACKNOWLEDGED" | "RESOLVED";
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  status: 'OPEN' | 'ACKNOWLEDGED' | 'RESOLVED';
   occurrenceCount: number;
+  recentCount: number;
   firstSeenAt: string;
   lastSeenAt: string;
   service: Service;
@@ -62,7 +68,7 @@ export type Incident = {
 export type ApiKey = {
   id: string;
   name: string;
-  type: "SERVER" | "CLIENT";
+  type: 'SERVER' | 'CLIENT';
   prefix: string;
   lastUsedAt?: string;
   revokedAt?: string;
@@ -96,8 +102,66 @@ export type DashboardSummary = {
     errorCount: number;
   }>;
   recentIncidents: Array<
-    Pick<Incident, "id" | "title" | "severity" | "status" | "lastSeenAt"> & {
+    Pick<Incident, 'id' | 'title' | 'severity' | 'status' | 'lastSeenAt'> & {
       serviceName: string;
     }
   >;
+};
+
+export type AlertChannel = {
+  id: string;
+  projectId: string;
+  name: string;
+  type: 'SLACK' | 'DISCORD' | 'TELEGRAM' | 'WEBHOOK';
+  config: Record<string, unknown>;
+  enabled: boolean;
+  createdAt: string;
+};
+export type AlertRule = {
+  id: string;
+  projectId: string;
+  channelId: string;
+  name: string;
+  enabled: boolean;
+  minSeverity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  serviceIds: string[];
+  environments: string[];
+  onCreated: boolean;
+  onSeverityIncrease: boolean;
+  onReopened: boolean;
+  throttleMinutes: number;
+  createdAt: string;
+  channel?: Pick<AlertChannel, 'id' | 'name' | 'type' | 'enabled'>;
+};
+export type AlertDelivery = {
+  id: string;
+  ruleId: string;
+  incidentId: string;
+  trigger: 'CREATED' | 'SEVERITY_INCREASED' | 'REOPENED';
+  status: 'SENT' | 'FAILED' | 'THROTTLED';
+  error?: string;
+  createdAt: string;
+  rule?: { id: string; name: string };
+};
+
+export type ProjectMember = {
+  id: string;
+  projectId: string;
+  userId: string;
+  role: 'VIEWER' | 'MEMBER' | 'ADMIN' | 'OWNER';
+  createdAt: string;
+  user: { id: string; email: string; name: string | null };
+};
+export type AuditLog = {
+  id: string;
+  projectId: string | null;
+  userId: string | null;
+  actorEmail: string | null;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  metadata: Record<string, unknown> | null;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
 };

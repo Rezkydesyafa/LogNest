@@ -7,8 +7,27 @@ x-backend-environment: &backend-environment
 x-logging: &default-logging
   driver: json-file
   options:
-    max-size: "10m"
-    max-file: "3"
+    max-size: '10m'
+    max-file: '3'
+
+x-demo-service: &demo-service
+  build:
+    context: .
+    dockerfile: apps/demo-services/Dockerfile
+  restart: unless-stopped
+  depends_on:
+    api:
+      condition: service_healthy
+  logging: *default-logging
+
+x-demo-environment: &demo-environment
+  NODE_ENV: production
+  PORT: '4000'
+  DEMO_ENVIRONMENT: '${DEMO_ENVIRONMENT:-production}'
+  DEMO_ERROR_RATE: '${DEMO_ERROR_RATE:-0.2}'
+  DEMO_TRAFFIC_INTERVAL_MS: '${DEMO_TRAFFIC_INTERVAL_MS:-6000}'
+  LOGMIND_API_KEY: '${LOGMIND_API_KEY:-}'
+  LOGMIND_INGEST_ENDPOINT: http://api:3000/logs/ingest
 
 services:
   postgres:
@@ -21,7 +40,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -36,7 +55,11 @@ services:
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet -u $${MONGO_INITDB_ROOT_USERNAME} -p $${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\""]
+      test:
+        [
+          'CMD-SHELL',
+          'mongosh --quiet -u $${MONGO_INITDB_ROOT_USERNAME} -p $${MONGO_INITDB_ROOT_PASSWORD} --authenticationDatabase admin --eval "db.adminCommand(''ping'').ok"',
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -47,11 +70,11 @@ services:
     restart: unless-stopped
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
+    command: ['sh', '-c', 'exec redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}"']
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      test: ['CMD-SHELL', 'redis-cli -a "$${REDIS_PASSWORD}" ping | grep PONG']
       interval: 10s
       timeout: 5s
       retries: 10
@@ -74,9 +97,15 @@ services:
       redis:
         condition: service_healthy
     expose:
-      - "3000"
+      - '3000'
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -91,6 +120,7 @@ services:
     env_file: .env.production
     environment:
       <<: *backend-environment
+      WORKER_METRICS_PORT: 3002
     depends_on:
       postgres:
         condition: service_healthy
@@ -98,6 +128,20 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    expose:
+      - '3002'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
     logging: *default-logging
 
   dashboard:
@@ -117,9 +161,15 @@ services:
       api:
         condition: service_healthy
     expose:
-      - "3001"
+      - '3001'
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -137,10 +187,18 @@ services:
       DOCKER_SOCKET: /var/run/docker.sock
       LOGMIND_API_KEY: ${LOGMIND_API_KEY:-}
       LOGMIND_INGEST_ENDPOINT: http://api:3000/logs/ingest
+      LOGMIND_COMPOSE_PROJECTS: ${LOGMIND_COMPOSE_PROJECTS:-}
+      LOGMIND_COMPOSE_SERVICES: ${LOGMIND_COMPOSE_SERVICES:-}
+      LOGMIND_DEFAULT_ENVIRONMENT: ${LOGMIND_DEFAULT_ENVIRONMENT:-production}
       LOGMIND_AGENT_RETRY_ATTEMPTS: ${LOGMIND_AGENT_RETRY_ATTEMPTS:-3}
       LOGMIND_AGENT_RETRY_DELAY_MS: ${LOGMIND_AGENT_RETRY_DELAY_MS:-1000}
+      LOGMIND_AGENT_BATCH_SIZE: ${LOGMIND_AGENT_BATCH_SIZE:-100}
+      LOGMIND_AGENT_BATCH_INTERVAL_MS: ${LOGMIND_AGENT_BATCH_INTERVAL_MS:-1000}
+      LOGMIND_AGENT_MAX_QUEUE: ${LOGMIND_AGENT_MAX_QUEUE:-10000}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      logmind.agent: 'true'
     depends_on:
       api:
         condition: service_healthy
@@ -152,7 +210,7 @@ services:
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS}
     ports:
-      - "127.0.0.1:${CADDY_HOST_PORT:-18080}:80"
+      - '127.0.0.1:${CADDY_HOST_PORT:-18080}:80'
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -163,6 +221,38 @@ services:
       dashboard:
         condition: service_healthy
     logging: *default-logging
+
+  # Demo services from the PRD's Phase 10 environment. They generate the traffic that makes
+  # the pipeline visible end to end. Remove this block for a real deployment.
+  demo-auth:
+    <<: *demo-service
+    environment:
+      <<: *demo-environment
+      DEMO_SERVICE: auth
+    labels:
+      logmind.enabled: 'true'
+      logmind.service: demo-auth-service
+      logmind.environment: '${DEMO_ENVIRONMENT:-production}'
+
+  demo-payment:
+    <<: *demo-service
+    environment:
+      <<: *demo-environment
+      DEMO_SERVICE: payment
+    labels:
+      logmind.enabled: 'true'
+      logmind.service: demo-payment-service
+      logmind.environment: '${DEMO_ENVIRONMENT:-production}'
+
+  demo-order:
+    <<: *demo-service
+    environment:
+      <<: *demo-environment
+      DEMO_SERVICE: order
+    labels:
+      logmind.enabled: 'true'
+      logmind.service: demo-order-service
+      logmind.environment: '${DEMO_ENVIRONMENT:-production}'
 
 volumes:
   postgres-data:

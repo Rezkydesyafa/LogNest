@@ -1,8 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { IncidentSeverity, IncidentStatus } from '@prisma/client';
 import { Model } from 'mongoose';
 import { PrismaService, RawLog } from '../../../../../packages/shared/src';
+import { startOfDayIn } from '../../../../../packages/shared/src';
+import { ProjectAccessService } from '../../common/services/project-access.service';
 import { serviceHealthStatus } from './dashboard-health';
 
 type CountBySource = {
@@ -32,12 +34,13 @@ type FrontendPageError = {
 export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly access: ProjectAccessService,
     @InjectModel(RawLog.name) private readonly rawLogModel: Model<RawLog>,
   ) {}
 
-  async summary(ownerId: string, projectId: string) {
-    await this.ensureProjectOwner(ownerId, projectId);
-    const today = this.startOfToday();
+  async summary(userId: string, projectId: string) {
+    await this.access.assert(userId, projectId);
+    const today = await this.startOfToday(projectId);
     const todayFilter = { projectId, timestamp: { $gte: today } };
     const [
       totalServices,
@@ -101,8 +104,8 @@ export class DashboardService {
     };
   }
 
-  async servicesHealth(ownerId: string, projectId: string) {
-    await this.ensureProjectOwner(ownerId, projectId);
+  async servicesHealth(userId: string, projectId: string) {
+    await this.access.assert(userId, projectId);
     const [services, incidents] = await Promise.all([
       this.prisma.service.findMany({
         where: { projectId },
@@ -143,16 +146,16 @@ export class DashboardService {
     });
   }
 
-  async apiPerformance(ownerId: string, projectId: string) {
-    await this.ensureProjectOwner(ownerId, projectId);
+  async apiPerformance(userId: string, projectId: string) {
+    await this.access.assert(userId, projectId);
     return {
-      items: await this.apiPerformanceRows(projectId, this.startOfToday(), 20),
+      items: await this.apiPerformanceRows(projectId, await this.startOfToday(projectId), 20),
     };
   }
 
-  async frontendErrors(ownerId: string, projectId: string) {
-    await this.ensureProjectOwner(ownerId, projectId);
-    const today = this.startOfToday();
+  async frontendErrors(userId: string, projectId: string) {
+    await this.access.assert(userId, projectId);
+    const today = await this.startOfToday(projectId);
     const match = {
       projectId,
       sourceType: 'frontend',
@@ -250,20 +253,18 @@ export class DashboardService {
     }));
   }
 
-  private async ensureProjectOwner(ownerId: string, projectId: string) {
-    const project = await this.prisma.project.findFirst({
-      where: { id: projectId, ownerId },
-      select: { id: true },
+  /**
+   * Where "today" starts for this project.
+   *
+   * This used to be the API server's local midnight, which is the wrong instant for every
+   * team not colocated with the server.
+   */
+  private async startOfToday(projectId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { timezone: true },
     });
 
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
-  }
-
-  private startOfToday() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return today;
+    return startOfDayIn(project?.timezone ?? 'UTC');
   }
 }

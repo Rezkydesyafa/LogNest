@@ -42,7 +42,9 @@ export function initLogMindFrontend(options: LogMindFrontendOptions): LogMindFro
     ...options,
     fetchImpl: options.fetchImpl ?? windowRef?.fetch?.bind(windowRef),
   };
-  const send = (payload: Omit<FrontendLogPayload, 'serviceName' | 'environment' | 'timestamp' | 'frontend'>) =>
+  const send = (
+    payload: Omit<FrontendLogPayload, 'serviceName' | 'environment' | 'timestamp' | 'frontend'>,
+  ) =>
     sendFrontendLog(sendOptions, {
       ...payload,
       serviceName: options.serviceName,

@@ -1,6 +1,8 @@
 import type { FrontendLogPayload } from './sdk';
 
-type SendLog = (payload: Omit<FrontendLogPayload, 'serviceName' | 'environment' | 'timestamp' | 'frontend'>) => void;
+type SendLog = (
+  payload: Omit<FrontendLogPayload, 'serviceName' | 'environment' | 'timestamp' | 'frontend'>,
+) => void;
 
 export function setupBrowserListeners(windowRef: Window, send: SendLog) {
   const onError = (event: ErrorEvent) => {

@@ -1,13 +1,9 @@
-"use client";
+'use client';
 
-import { AppSidebar } from "@/components/app-sidebar";
-import { ProjectPicker, ProjectProvider } from "@/components/project-context";
-import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { AppSidebar } from '@/components/app-sidebar';
+import { ProjectPicker, ProjectProvider } from '@/components/project-context';
+import { Separator } from '@/components/ui/separator';
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
@@ -19,9 +15,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2">
               <SidebarTrigger />
               <Separator orientation="vertical" className="h-4" />
-              <span className="hidden text-sm font-medium sm:inline">
-                Operations
-              </span>
+              <span className="hidden text-sm font-medium sm:inline">Operations</span>
             </div>
             <ProjectPicker />
           </header>

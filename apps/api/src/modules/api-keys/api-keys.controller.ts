@@ -1,8 +1,10 @@
 import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { CurrentActor } from '../../common/decorators/current-actor.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ApiCreateDocs, ApiDeleteDocs, ApiDocs, ApiIdParam } from '../../common/swagger/docs';
+import { AuditActor } from '../../common/services/audit.service';
 import { CurrentUserPayload } from '../../common/types/auth.types';
 import { ApiKeysService } from './api-keys.service';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
@@ -18,11 +20,11 @@ export class ApiKeysController {
   @ApiCreateDocs('Create a server or client API key. Raw key is returned once.')
   @ApiIdParam('projectId', 'Project id.')
   create(
-    @CurrentUser() user: CurrentUserPayload,
+    @CurrentActor() actor: AuditActor,
     @Param('projectId') projectId: string,
     @Body() dto: CreateApiKeyDto,
   ) {
-    return this.apiKeysService.create(user.id, projectId, dto);
+    return this.apiKeysService.create(actor, projectId, dto);
   }
 
   @Get('projects/:projectId/api-keys')
@@ -35,7 +37,7 @@ export class ApiKeysController {
   @Delete('api-keys/:apiKeyId')
   @ApiDeleteDocs('Revoke an API key.')
   @ApiIdParam('apiKeyId', 'API key id.')
-  revoke(@CurrentUser() user: CurrentUserPayload, @Param('apiKeyId') apiKeyId: string) {
-    return this.apiKeysService.revoke(user.id, apiKeyId);
+  revoke(@CurrentActor() actor: AuditActor, @Param('apiKeyId') apiKeyId: string) {
+    return this.apiKeysService.revoke(actor, apiKeyId);
   }
 }

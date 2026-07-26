@@ -27,7 +27,11 @@ export function ApiCreateDocs(summary: string, description = 'Resource created.'
 }
 
 export function ApiDeleteDocs(summary: string, description = 'Resource deleted or revoked.') {
-  return applyDecorators(ApiOperation({ summary }), ApiNoContentResponse({ description }), ApiOkResponse({ description }));
+  return applyDecorators(
+    ApiOperation({ summary }),
+    ApiNoContentResponse({ description }),
+    ApiOkResponse({ description }),
+  );
 }
 
 export function ApiIdParam(name: string, description: string) {

@@ -31,27 +31,98 @@ enum IncidentEventType {
   STATUS_CHANGED
 }
 
+enum ProjectRole {
+  VIEWER
+  MEMBER
+  ADMIN
+  OWNER
+}
+
+enum AlertChannelType {
+  SLACK
+  DISCORD
+  TELEGRAM
+  WEBHOOK
+}
+
+enum AlertTrigger {
+  CREATED
+  SEVERITY_INCREASED
+  REOPENED
+}
+
+enum AlertDeliveryStatus {
+  SENT
+  FAILED
+  THROTTLED
+}
+
 model User {
+  id                  String               @id @default(cuid())
+  email               String               @unique
+  name                String?
+  passwordHash        String
+  /// Projects this user created. Access is granted through ProjectMember, not this relation.
+  projects            Project[]
+  memberships         ProjectMember[]
+  refreshTokens       RefreshToken[]
+  auditLogs           AuditLog[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  passwordResetTokens PasswordResetToken[]
+}
+
+/// One issued refresh token. Stored hashed, rotated on every use, revocable individually
+/// or per user (logout everywhere).
+model RefreshToken {
   id           String    @id @default(cuid())
-  email        String    @unique
-  name         String?
-  passwordHash String
-  projects     Project[]
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique
+  /// Set when this token was rotated, pointing at the token that replaced it.
+  replacedById String?
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  userAgent    String?
+  ip           String?
   createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Grants a user access to a project. The creator is seeded as OWNER.
+model ProjectMember {
+  id        String      @id @default(cuid())
+  projectId String
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      ProjectRole @default(VIEWER)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([projectId, userId])
+  @@index([userId])
 }
 
 model Project {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  ownerId     String
-  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  apiKeys     ApiKey[]
-  services    Service[]
-  incidents   Incident[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String          @id @default(cuid())
+  name          String
+  description   String?
+  /// IANA timezone used to decide where "today" starts on the dashboard.
+  timezone      String          @default("UTC")
+  ownerId       String
+  owner         User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  apiKeys       ApiKey[]
+  services      Service[]
+  incidents     Incident[]
+  alertChannels AlertChannel[]
+  alertRules    AlertRule[]
+  members       ProjectMember[]
+  auditLogs     AuditLog[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
 
   @@unique([ownerId, name])
   @@index([ownerId])
@@ -74,19 +145,19 @@ model ApiKey {
 }
 
 model Service {
-  id          String   @id @default(cuid())
+  id          String     @id @default(cuid())
   projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name        String
   environment String
-  sourceTypes String[] @default([])
+  sourceTypes String[]   @default([])
   metadata    Json?
-  lastSeenAt  DateTime @default(now())
-  logCount    Int      @default(0)
-  errorCount  Int      @default(0)
+  lastSeenAt  DateTime   @default(now())
+  logCount    Int        @default(0)
+  errorCount  Int        @default(0)
   incidents   Incident[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@unique([projectId, name, environment])
   @@index([projectId])
@@ -94,30 +165,33 @@ model Service {
 }
 
 model Incident {
-  id              String           @id @default(cuid())
-  projectId       String
-  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  serviceId       String
-  service         Service          @relation(fields: [serviceId], references: [id], onDelete: Cascade)
-  fingerprint     String
-  title           String
-  severity        IncidentSeverity
-  status          IncidentStatus   @default(OPEN)
-  occurrenceCount Int              @default(0)
-  firstSeenAt     DateTime         @default(now())
-  lastSeenAt      DateTime         @default(now())
-  lastRawLogId    String?
-  aiSummary       String?
-  aiPossibleCause String?
-  aiImpact        String?
-  aiSuggestedActions String[]       @default([])
-  aiConfidence    String?
-  aiLastAnalyzedAt DateTime?
-  aiError         String?
-  resolvedAt      DateTime?
-  events          IncidentEvent[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  id                 String           @id @default(cuid())
+  projectId          String
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  serviceId          String
+  service            Service          @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  fingerprint        String
+  title              String
+  severity           IncidentSeverity
+  status             IncidentStatus   @default(OPEN)
+  /// Lifetime number of matching errors, incremented once per processed log.
+  occurrenceCount    Int              @default(0)
+  /// Matching errors inside the current 10 minute detection window.
+  recentCount        Int              @default(0)
+  firstSeenAt        DateTime         @default(now())
+  lastSeenAt         DateTime         @default(now())
+  lastRawLogId       String?
+  aiSummary          String?
+  aiPossibleCause    String?
+  aiImpact           String?
+  aiSuggestedActions String[]         @default([])
+  aiConfidence       String?
+  aiLastAnalyzedAt   DateTime?
+  aiError            String?
+  resolvedAt         DateTime?
+  events             IncidentEvent[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
   @@unique([projectId, serviceId, fingerprint])
   @@index([projectId, status])
@@ -135,4 +209,104 @@ model IncidentEvent {
   createdAt  DateTime          @default(now())
 
   @@index([incidentId])
+}
+
+/// Where an alert is delivered. `config` holds channel secrets and is never returned raw by the API.
+model AlertChannel {
+  id         String           @id @default(cuid())
+  projectId  String
+  project    Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name       String
+  type       AlertChannelType
+  config     Json
+  enabled    Boolean          @default(true)
+  rules      AlertRule[]
+  deliveries AlertDelivery[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+/// When an incident should produce an alert on a channel.
+model AlertRule {
+  id                 String           @id @default(cuid())
+  projectId          String
+  project            Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  channelId          String
+  channel            AlertChannel     @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  name               String
+  enabled            Boolean          @default(true)
+  /// Alerts fire for this severity and anything above it.
+  minSeverity        IncidentSeverity @default(HIGH)
+  /// Empty means every service in the project.
+  serviceIds         String[]         @default([])
+  /// Empty means every environment.
+  environments       String[]         @default([])
+  onCreated          Boolean          @default(true)
+  onSeverityIncrease Boolean          @default(true)
+  onReopened         Boolean          @default(true)
+  /// Minimum gap between two alerts for the same incident on this rule.
+  throttleMinutes    Int              @default(30)
+  deliveries         AlertDelivery[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([projectId, name])
+  @@index([projectId, enabled])
+}
+
+model AlertDelivery {
+  id         String              @id @default(cuid())
+  ruleId     String
+  rule       AlertRule           @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  channelId  String
+  channel    AlertChannel        @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  incidentId String
+  trigger    AlertTrigger
+  status     AlertDeliveryStatus
+  error      String?
+  createdAt  DateTime            @default(now())
+
+  @@index([ruleId, createdAt])
+  @@index([incidentId])
+}
+
+/// Append-only record of who changed what. Never updated or deleted by the application.
+model AuditLog {
+  id         String   @id @default(cuid())
+  /// Null for account-level actions such as login, which belong to no project.
+  projectId  String?
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Kept even when the user row is gone, so the trail survives account deletion.
+  actorEmail String?
+  action     String
+  targetType String
+  targetId   String?
+  metadata   Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action])
+}
+
+/// One-time password reset grant. Stored hashed and single-use, like a refresh token.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  ip        String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }

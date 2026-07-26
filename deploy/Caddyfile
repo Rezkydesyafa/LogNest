@@ -1,6 +1,11 @@
 {$SITE_ADDRESS:http://localhost} {
   encode zstd gzip
 
+  # Metrics leak route shapes and traffic volumes. Prometheus scrapes the API and the worker
+  # from inside the Compose network, so the endpoint never needs to be publicly reachable.
+  @metrics path /backend/metrics /backend/metrics/*
+  respond @metrics 404
+
   handle_path /backend/* {
     reverse_proxy api:3000
   }

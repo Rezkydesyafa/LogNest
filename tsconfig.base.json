@@ -12,5 +12,6 @@
     "rootDir": ".",
     "outDir": "dist",
     "sourceMap": true
-  }
+  },
+  "exclude": ["node_modules", "dist", "tests", "**/*.spec.ts", "**/*.test.ts"]
 }

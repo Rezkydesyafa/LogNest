@@ -1,6 +1,6 @@
-import { FolderPlusIcon, TriangleAlertIcon } from "lucide-react";
-import { CreateProjectDialog } from "@/components/project-context";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { FolderPlusIcon, TriangleAlertIcon } from 'lucide-react';
+import { CreateProjectDialog } from '@/components/project-context';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Empty,
   EmptyContent,
@@ -8,8 +8,8 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty";
-import { Skeleton } from "@/components/ui/skeleton";
+} from '@/components/ui/empty';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export function PageHeader({
   title,
@@ -39,9 +39,7 @@ export function ProjectRequired() {
           <FolderPlusIcon />
         </EmptyMedia>
         <EmptyTitle>Create your first project</EmptyTitle>
-        <EmptyDescription>
-          A project connects services, API keys, logs, and incidents.
-        </EmptyDescription>
+        <EmptyDescription>A project connects services, API keys, logs, and incidents.</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <CreateProjectDialog />

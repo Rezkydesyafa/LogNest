@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import {
   ActivityIcon,
   BoxesIcon,
@@ -10,56 +10,32 @@ import {
   ContainerIcon,
   RadioTowerIcon,
   SirenIcon,
-} from "lucide-react";
-import { api, formatDate, queryString } from "@/lib/api";
-import type { DashboardSummary, Service } from "@/lib/types";
-import { useProject } from "@/components/project-context";
-import {
-  ErrorState,
-  PageHeader,
-  PageLoading,
-  ProjectRequired,
-} from "@/components/page-state";
-import { StatusBadge } from "@/components/status-badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+} from 'lucide-react';
+import { api, formatDate, queryString } from '@/lib/api';
+import type { DashboardSummary, Service } from '@/lib/types';
+import { useProject } from '@/components/project-context';
+import { OnboardingChecklist } from '@/components/onboarding-checklist';
+import { ErrorState, PageHeader, PageLoading, ProjectRequired } from '@/components/page-state';
+import { StatusBadge } from '@/components/status-badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const chartConfig = {
-  errorCount: { label: "Errors", color: "var(--chart-2)" },
+  errorCount: { label: 'Errors', color: 'var(--chart-2)' },
 } satisfies ChartConfig;
 
 export default function OverviewPage() {
   const { projectId, loading } = useProject();
   const summary = useQuery({
-    queryKey: ["dashboard", "summary", projectId],
-    queryFn: () =>
-      api<DashboardSummary>(`/dashboard/summary${queryString({ projectId })}`),
+    queryKey: ['dashboard', 'summary', projectId],
+    queryFn: () => api<DashboardSummary>(`/dashboard/summary${queryString({ projectId })}`),
     enabled: Boolean(projectId),
     refetchInterval: 30_000,
   });
   const health = useQuery({
-    queryKey: ["dashboard", "health", projectId],
-    queryFn: () =>
-      api<Service[]>(`/dashboard/services-health${queryString({ projectId })}`),
+    queryKey: ['dashboard', 'health', projectId],
+    queryFn: () => api<Service[]>(`/dashboard/services-health${queryString({ projectId })}`),
     enabled: Boolean(projectId),
     refetchInterval: 30_000,
   });
@@ -69,23 +45,21 @@ export default function OverviewPage() {
   if (!summary.data) return <PageLoading />;
   const data = summary.data;
   const metrics = [
-    { label: "Services", value: data.totalServices, icon: BoxesIcon },
-    { label: "Logs today", value: data.totalLogsToday, icon: ActivityIcon },
+    { label: 'Services', value: data.totalServices, icon: BoxesIcon },
+    { label: 'Logs today', value: data.totalLogsToday, icon: ActivityIcon },
     {
-      label: "Errors today",
+      label: 'Errors today',
       value: data.errorLogsToday,
       icon: CircleAlertIcon,
     },
-    { label: "Open incidents", value: data.openIncidents, icon: SirenIcon },
-    { label: "Critical", value: data.criticalIncidents, icon: RadioTowerIcon },
-    { label: "Docker logs", value: data.dockerLogsToday, icon: ContainerIcon },
+    { label: 'Open incidents', value: data.openIncidents, icon: SirenIcon },
+    { label: 'Critical', value: data.criticalIncidents, icon: RadioTowerIcon },
+    { label: 'Docker logs', value: data.dockerLogsToday, icon: ContainerIcon },
   ];
   return (
     <>
-      <PageHeader
-        title="Overview"
-        description="Current operational state for the selected project."
-      />
+      <PageHeader title="Overview" description="Current operational state for the selected project." />
+      <OnboardingChecklist />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {metrics.map(({ label, value, icon: Icon }) => (
           <Card key={label}>
@@ -94,9 +68,7 @@ export default function OverviewPage() {
               <Icon className="size-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-semibold tabular-nums">
-                {value.toLocaleString()}
-              </p>
+              <p className="text-2xl font-semibold tabular-nums">{value.toLocaleString()}</p>
             </CardContent>
           </Card>
         ))}
@@ -126,17 +98,11 @@ export default function OverviewPage() {
                   />
                   <XAxis type="number" hide />
                   <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar
-                    dataKey="errorCount"
-                    fill="var(--color-errorCount)"
-                    radius={4}
-                  />
+                  <Bar dataKey="errorCount" fill="var(--color-errorCount)" radius={4} />
                 </BarChart>
               </ChartContainer>
             ) : (
-              <p className="py-20 text-center text-sm text-muted-foreground">
-                No errors today.
-              </p>
+              <p className="py-20 text-center text-sm text-muted-foreground">No errors today.</p>
             )}
           </CardContent>
         </Card>
@@ -158,30 +124,21 @@ export default function OverviewPage() {
                 {(health.data ?? []).slice(0, 6).map((service) => (
                   <TableRow key={service.id}>
                     <TableCell>
-                      <Link
-                        className="font-medium hover:underline"
-                        href={`/logs?serviceId=${service.id}`}
-                      >
+                      <Link className="font-medium hover:underline" href={`/logs?serviceId=${service.id}`}>
                         {service.name}
                       </Link>
-                      <div className="text-xs text-muted-foreground">
-                        {service.environment}
-                      </div>
+                      <div className="text-xs text-muted-foreground">{service.environment}</div>
                     </TableCell>
                     <TableCell>
                       <StatusBadge value={service.status} />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {service.errorCount}
-                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{service.errorCount}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
             {!health.data?.length && (
-              <p className="py-12 text-center text-sm text-muted-foreground">
-                No services registered yet.
-              </p>
+              <p className="py-12 text-center text-sm text-muted-foreground">No services registered yet.</p>
             )}
           </CardContent>
         </Card>
@@ -189,9 +146,7 @@ export default function OverviewPage() {
       <Card className="mt-6">
         <CardHeader>
           <CardTitle>Recent incidents</CardTitle>
-          <CardDescription>
-            Latest fingerprint groups requiring attention.
-          </CardDescription>
+          <CardDescription>Latest fingerprint groups requiring attention.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -208,10 +163,7 @@ export default function OverviewPage() {
               {data.recentIncidents.map((incident) => (
                 <TableRow key={incident.id}>
                   <TableCell>
-                    <Link
-                      className="font-medium hover:underline"
-                      href={`/incidents/${incident.id}`}
-                    >
+                    <Link className="font-medium hover:underline" href={`/incidents/${incident.id}`}>
                       {incident.title}
                     </Link>
                   </TableCell>
@@ -228,9 +180,7 @@ export default function OverviewPage() {
             </TableBody>
           </Table>
           {!data.recentIncidents.length && (
-            <p className="py-12 text-center text-sm text-muted-foreground">
-              No incidents detected.
-            </p>
+            <p className="py-12 text-center text-sm text-muted-foreground">No incidents detected.</p>
           )}
         </CardContent>
       </Card>

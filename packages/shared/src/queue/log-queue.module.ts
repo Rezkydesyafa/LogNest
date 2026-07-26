@@ -1,7 +1,7 @@
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { DEFAULT_REDIS_URL, LOG_PROCESSING_QUEUE } from '../constants';
+import { DEFAULT_REDIS_URL, INCIDENT_ANALYSIS_QUEUE, LOG_PROCESSING_QUEUE } from '../constants';
 import { redisOptionsFromUrl } from '../redis/redis-options';
 
 @Module({
@@ -13,9 +13,7 @@ import { redisOptionsFromUrl } from '../redis/redis-options';
         connection: redisOptionsFromUrl(config.get<string>('REDIS_URL') ?? DEFAULT_REDIS_URL),
       }),
     }),
-    BullModule.registerQueue({
-      name: LOG_PROCESSING_QUEUE,
-    }),
+    BullModule.registerQueue({ name: LOG_PROCESSING_QUEUE }, { name: INCIDENT_ANALYSIS_QUEUE }),
   ],
   exports: [BullModule],
 })
