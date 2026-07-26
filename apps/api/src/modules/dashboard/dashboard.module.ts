@@ -6,10 +6,7 @@ import { DashboardController } from './dashboard.controller';
 import { DashboardService } from './dashboard.service';
 
 @Module({
-  imports: [
-    AuthModule,
-    MongooseModule.forFeature([{ name: RawLog.name, schema: RawLogSchema }]),
-  ],
+  imports: [AuthModule, MongooseModule.forFeature([{ name: RawLog.name, schema: RawLogSchema }])],
   controllers: [DashboardController],
   providers: [DashboardService],
 })
