@@ -1,21 +1,17 @@
-"use client";
+'use client';
 
-import { use, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BrainCircuitIcon, RefreshCwIcon } from "lucide-react";
-import { toast } from "sonner";
-import { api, formatDate, queryString } from "@/lib/api";
-import type { Incident, Log, Page } from "@/lib/types";
-import { ErrorState, PageHeader, PageLoading } from "@/components/page-state";
-import { StatusBadge } from "@/components/status-badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { use, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { BrainCircuitIcon, RefreshCwIcon } from 'lucide-react';
+import { toast } from 'sonner';
+import { api, formatDate, queryString } from '@/lib/api';
+import type { Incident, Log, Page } from '@/lib/types';
+import { ErrorState, PageHeader, PageLoading } from '@/components/page-state';
+import { useProject } from '@/components/project-context';
+import { deniedReason } from '@/lib/permissions';
+import { StatusBadge } from '@/components/status-badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -23,55 +19,43 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Spinner } from "@/components/ui/spinner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+} from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-export default function IncidentDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default function IncidentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const queryClient = useQueryClient();
   const [logPage] = useState(1);
+  const { can } = useProject();
+  const mayOperate = can('changeIncidentStatus');
   const incident = useQuery({
-    queryKey: ["incident", id],
+    queryKey: ['incident', id],
     queryFn: () => api<Incident>(`/incidents/${id}`),
   });
   const logs = useQuery({
-    queryKey: ["incident", id, "logs", logPage],
-    queryFn: () =>
-      api<Page<Log>>(
-        `/incidents/${id}/logs${queryString({ page: logPage, limit: 25 })}`,
-      ),
+    queryKey: ['incident', id, 'logs', logPage],
+    queryFn: () => api<Page<Log>>(`/incidents/${id}/logs${queryString({ page: logPage, limit: 25 })}`),
   });
   const status = useMutation({
     mutationFn: (value: string) =>
       api<Incident>(`/incidents/${id}/status`, {
-        method: "PATCH",
+        method: 'PATCH',
         body: JSON.stringify({ status: value }),
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["incident", id] });
-      await queryClient.invalidateQueries({ queryKey: ["incidents"] });
-      toast.success("Incident status updated");
+      await queryClient.invalidateQueries({ queryKey: ['incident', id] });
+      await queryClient.invalidateQueries({ queryKey: ['incidents'] });
+      toast.success('Incident status updated');
     },
     onError: (error) => toast.error(error.message),
   });
   const analyze = useMutation({
-    mutationFn: () => api(`/incidents/${id}/analyze`, { method: "POST" }),
+    mutationFn: () => api(`/incidents/${id}/analyze`, { method: 'POST' }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["incident", id] });
-      toast.success("AI analysis completed");
+      await queryClient.invalidateQueries({ queryKey: ['incident', id] });
+      toast.success('AI analysis completed');
     },
     onError: (error) => toast.error(error.message),
   });
@@ -90,14 +74,18 @@ export default function IncidentDetailPage({
             <Select
               value={item.status}
               onValueChange={(value) => status.mutate(value)}
-              disabled={status.isPending}
+              disabled={!mayOperate || status.isPending}
             >
-              <SelectTrigger aria-label="Incident status" className="w-44">
+              <SelectTrigger
+                aria-label="Incident status"
+                className="w-44"
+                title={mayOperate ? undefined : deniedReason('changeIncidentStatus')}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  {["OPEN", "ACKNOWLEDGED", "RESOLVED"].map((value) => (
+                  {['OPEN', 'ACKNOWLEDGED', 'RESOLVED'].map((value) => (
                     <SelectItem key={value} value={value}>
                       {value.toLowerCase()}
                     </SelectItem>
@@ -114,9 +102,8 @@ export default function IncidentDetailPage({
             <CardDescription>Occurrences</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold tabular-nums">
-              {item.occurrenceCount}
-            </p>
+            <p className="text-2xl font-semibold tabular-nums">{item.occurrenceCount}</p>
+            <p className="text-muted-foreground mt-1 text-xs">{item.recentCount} in the last 10 minutes</p>
           </CardContent>
         </Card>
         <Card>
@@ -124,9 +111,7 @@ export default function IncidentDetailPage({
             <CardDescription>First seen</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm font-medium">
-              {formatDate(item.firstSeenAt)}
-            </p>
+            <p className="text-sm font-medium">{formatDate(item.firstSeenAt)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -153,13 +138,10 @@ export default function IncidentDetailPage({
                   <CardDescription>
                     {item.aiLastAnalyzedAt
                       ? `Last analyzed ${formatDate(item.aiLastAnalyzedAt)}`
-                      : "Generate a structured incident summary."}
+                      : 'Generate a structured incident summary.'}
                   </CardDescription>
                 </div>
-                <Button
-                  onClick={() => analyze.mutate()}
-                  disabled={analyze.isPending}
-                >
+                <Button onClick={() => analyze.mutate()} disabled={analyze.isPending}>
                   {analyze.isPending ? (
                     <Spinner data-icon="inline-start" />
                   ) : item.aiSummary ? (
@@ -167,7 +149,7 @@ export default function IncidentDetailPage({
                   ) : (
                     <BrainCircuitIcon data-icon="inline-start" />
                   )}
-                  {item.aiSummary ? "Refresh analysis" : "Analyze incident"}
+                  {item.aiSummary ? 'Refresh analysis' : 'Analyze incident'}
                 </Button>
               </div>
             </CardHeader>
@@ -176,21 +158,15 @@ export default function IncidentDetailPage({
                 <div className="grid gap-6 lg:grid-cols-2">
                   <section>
                     <h3 className="mb-2 font-medium">Summary</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {item.aiSummary}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{item.aiSummary}</p>
                   </section>
                   <section>
                     <h3 className="mb-2 font-medium">Possible cause</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {item.aiPossibleCause}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{item.aiPossibleCause}</p>
                   </section>
                   <section>
                     <h3 className="mb-2 font-medium">Impact</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {item.aiImpact}
-                    </p>
+                    <p className="text-sm text-muted-foreground">{item.aiImpact}</p>
                   </section>
                   <section>
                     <h3 className="mb-2 font-medium">Suggested actions</h3>
@@ -224,24 +200,18 @@ export default function IncidentDetailPage({
                   <TableBody>
                     {(logs.data?.items ?? []).map((log) => (
                       <TableRow key={log.id}>
-                        <TableCell className="whitespace-nowrap">
-                          {formatDate(log.timestamp)}
-                        </TableCell>
+                        <TableCell className="whitespace-nowrap">{formatDate(log.timestamp)}</TableCell>
                         <TableCell>
                           <StatusBadge value={log.level} />
                         </TableCell>
-                        <TableCell className="max-w-2xl font-mono text-xs">
-                          {log.message}
-                        </TableCell>
+                        <TableCell className="max-w-2xl font-mono text-xs">{log.message}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
               {!logs.data?.items.length && (
-                <p className="py-16 text-center text-sm text-muted-foreground">
-                  No related raw logs found.
-                </p>
+                <p className="py-16 text-center text-sm text-muted-foreground">No related raw logs found.</p>
               )}
             </CardContent>
           </Card>
@@ -257,9 +227,7 @@ export default function IncidentDetailPage({
                 {item.events.map((event) => (
                   <li key={event.id} className="border-l pl-4">
                     <p className="text-sm font-medium">{event.message}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDate(event.createdAt)}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{formatDate(event.createdAt)}</p>
                   </li>
                 ))}
               </ol>
