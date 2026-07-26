@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ServerApiKeyGuard } from '../../common/guards/server-api-key.guard';
 import { ApiCreateDocs, ApiDocs, ApiIdParam } from '../../common/swagger/docs';
 import { ApiKeyContext, CurrentUserPayload } from '../../common/types/auth.types';
+import { BulkLogIngestionDto } from './dto/bulk-log-ingestion.dto';
 import { FindLogsQueryDto } from './dto/find-logs-query.dto';
 import { FrontendLogDto } from './dto/frontend-log.dto';
 import { LogIngestionDto } from './dto/log-ingestion.dto';
@@ -23,6 +24,14 @@ export class LogsController {
   @UseGuards(ServerApiKeyGuard)
   ingest(@CurrentApiKey() apiKey: ApiKeyContext, @Body() dto: LogIngestionDto) {
     return this.logsService.ingest(apiKey, dto);
+  }
+
+  @Post('logs/ingest/bulk')
+  @ApiSecurity('api-key')
+  @ApiCreateDocs('Ingest up to 500 logs in one request with a server API key.')
+  @UseGuards(ServerApiKeyGuard)
+  ingestBulk(@CurrentApiKey() apiKey: ApiKeyContext, @Body() dto: BulkLogIngestionDto) {
+    return this.logsService.ingestBulk(apiKey, dto.logs);
   }
 
   @Post('logs/frontend')
