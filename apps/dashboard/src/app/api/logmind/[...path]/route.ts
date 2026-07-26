@@ -1,32 +1,53 @@
-import { cookies } from "next/headers";
-import { NextRequest, NextResponse } from "next/server";
-import { isAllowedProxyRequest } from "@/lib/proxy-policy";
-import { relay, SESSION_COOKIE, upstream } from "@/lib/server-api";
+import { cookies } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
+import { isAllowedProxyRequest } from '@/lib/proxy-policy';
+import {
+  clearSessionCookies,
+  refreshSession,
+  relay,
+  SESSION_COOKIE,
+  setSessionCookies,
+  upstream,
+} from '@/lib/server-api';
 
 type Context = { params: Promise<{ path: string[] }> };
 
 async function handler(request: NextRequest, context: Context) {
   const segments = (await context.params).path;
-  const path = `/${segments.map(encodeURIComponent).join("/")}`;
+  const path = `/${segments.map(encodeURIComponent).join('/')}`;
   if (!isAllowedProxyRequest(request.method, path))
-    return NextResponse.json({ error: "Route not allowed" }, { status: 404 });
+    return NextResponse.json({ error: 'Route not allowed' }, { status: 404 });
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (!token)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // The body can only be read once, so buffer it before a possible retry.
+  const body = request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.text();
+  const call = (accessToken: string) =>
+    upstream(`${path}${request.nextUrl.search}`, {
+      method: request.method,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        'content-type': request.headers.get('content-type') ?? 'application/json',
+      },
+      body,
+    });
 
-  const response = await upstream(`${path}${request.nextUrl.search}`, {
-    method: request.method,
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": request.headers.get("content-type") ?? "application/json",
-    },
-    body:
-      request.method === "GET" || request.method === "HEAD"
-        ? undefined
-        : await request.text(),
-  });
+  let response = token ? await call(token) : undefined;
+
+  // Access tokens are short lived now, so a 401 is usually just an expired token.
+  // Refresh once and replay the request rather than bouncing the user to the login page.
+  if (!response || response.status === 401) {
+    const session = await refreshSession();
+
+    if (!session) {
+      return clearSessionCookies(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+    }
+
+    response = await call(session.accessToken);
+    const result = await relay(response);
+    return setSessionCookies(result, session);
+  }
+
   const result = await relay(response);
-  if (response.status === 401) result.cookies.delete(SESSION_COOKIE);
+  if (response.status === 401) clearSessionCookies(result);
   return result;
 }
 
