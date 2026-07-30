@@ -18,6 +18,7 @@ describe('isAllowedProxyRequest', () => {
     ['POST', '/incidents/i1/analyze'],
     ['GET', '/dashboard/summary'],
     ['GET', '/dashboard/services-health'],
+    ['GET', '/dashboard/services/service_123'],
     ['GET', '/projects/p1/alert-channels'],
     ['GET', '/projects/p1/alert-rules'],
     ['GET', '/projects/p1/alert-deliveries'],

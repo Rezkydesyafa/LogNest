@@ -1,33 +1,37 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { IncidentSeverity, IncidentStatus } from '@prisma/client';
-import { Model } from 'mongoose';
+import { Model, PipelineStage } from 'mongoose';
 import { PrismaService, RawLog } from '../../../../../packages/shared/src';
-import { startOfDayIn } from '../../../../../packages/shared/src';
 import { ProjectAccessService } from '../../common/services/project-access.service';
-import { serviceHealthStatus } from './dashboard-health';
+import { serviceHealth } from './dashboard-health';
+import { DashboardRange, dashboardWindow, percentChange } from './dashboard-range';
 
-type CountBySource = {
-  _id: string;
+type Window = ReturnType<typeof dashboardWindow>;
+type PeriodSourceCount = {
+  _id: { period: 'current' | 'previous'; sourceType: string };
   count: number;
+  errorCount: number;
 };
-
 type TopErrorService = {
   _id: { serviceId: string; serviceName: string };
   errorCount: number;
 };
-
 type ApiPerformanceRow = {
   _id: { path: string; method: string };
   count: number;
   avgDurationMs: number;
   maxDurationMs: number;
+  percentiles: number[];
   errorCount: number;
 };
-
-type FrontendPageError = {
-  _id: string;
-  count: number;
+type FrontendPageError = { _id: string; count: number };
+type ServicePeriodStats = { _id: string; logCount: number; errorCount: number };
+type TimelineRow = {
+  _id: Date;
+  logCount: number;
+  errorCount: number;
+  avgApiDurationMs?: number;
 };
 
 @Injectable()
@@ -38,29 +42,23 @@ export class DashboardService {
     @InjectModel(RawLog.name) private readonly rawLogModel: Model<RawLog>,
   ) {}
 
-  async summary(userId: string, projectId: string) {
+  async summary(userId: string, projectId: string, range: DashboardRange = '24h') {
     await this.access.assert(userId, projectId);
-    const today = await this.startOfToday(projectId);
-    const todayFilter = { projectId, timestamp: { $gte: today } };
+    const window = dashboardWindow(range);
     const [
       totalServices,
-      countsBySource,
-      errorLogsToday,
+      periodRows,
       openIncidents,
       criticalIncidents,
       topErrorServices,
       slowestApiEndpoints,
       recentIncidents,
+      currentIncidentCount,
+      previousIncidentCount,
+      timeSeries,
     ] = await Promise.all([
       this.prisma.service.count({ where: { projectId } }),
-      this.rawLogModel.aggregate<CountBySource>([
-        { $match: todayFilter },
-        { $group: { _id: '$sourceType', count: { $sum: 1 } } },
-      ]),
-      this.rawLogModel.countDocuments({
-        ...todayFilter,
-        level: { $in: ['error', 'fatal'] },
-      }),
+      this.periodSourceCounts(projectId, window),
       this.prisma.incident.count({
         where: { projectId, status: { not: IncidentStatus.RESOLVED } },
       }),
@@ -71,26 +69,49 @@ export class DashboardService {
           severity: IncidentSeverity.CRITICAL,
         },
       }),
-      this.topErrorServices(projectId, today, 5),
-      this.apiPerformanceRows(projectId, today, 5),
+      this.topErrorServices(projectId, window, 5),
+      this.apiPerformanceRows(projectId, window, 5),
       this.prisma.incident.findMany({
         where: { projectId },
         include: { service: true },
         orderBy: { lastSeenAt: 'desc' },
         take: 5,
       }),
+      this.prisma.incident.count({
+        where: { projectId, createdAt: { gte: window.from, lt: window.to } },
+      }),
+      this.prisma.incident.count({
+        where: { projectId, createdAt: { gte: window.previousFrom, lt: window.from } },
+      }),
+      this.timeSeries(projectId, window),
     ]);
-    const sourceCounts = Object.fromEntries(countsBySource.map((row) => [row._id, row.count]));
+    const currentRows = periodRows.filter((row) => row._id.period === 'current');
+    const previousRows = periodRows.filter((row) => row._id.period === 'previous');
+    const sourceCounts = this.sourceCounts(currentRows);
+    const currentTotal = sum(currentRows, 'count');
+    const currentErrors = sum(currentRows, 'errorCount');
+    const previousTotal = sum(previousRows, 'count');
+    const previousErrors = sum(previousRows, 'errorCount');
 
     return {
+      range: rangeResponse(window),
       totalServices,
-      totalLogsToday: Object.values(sourceCounts).reduce((sum, count) => sum + count, 0),
-      dockerLogsToday: sourceCounts.docker ?? 0,
-      apiLogsToday: sourceCounts.api ?? 0,
-      frontendLogsToday: sourceCounts.frontend ?? 0,
-      errorLogsToday,
+      totalLogs: currentTotal,
+      dockerLogs: sourceCounts.docker,
+      apiLogs: sourceCounts.api,
+      frontendLogs: sourceCounts.frontend,
+      workerLogs: sourceCounts.worker,
+      manualLogs: sourceCounts.manual,
+      errorLogs: currentErrors,
       openIncidents,
       criticalIncidents,
+      sourceCounts,
+      trends: {
+        totalLogs: percentChange(currentTotal, previousTotal),
+        errorLogs: percentChange(currentErrors, previousErrors),
+        incidents: percentChange(currentIncidentCount, previousIncidentCount),
+      },
+      timeSeries,
       topErrorServices,
       slowestApiEndpoints,
       recentIncidents: recentIncidents.map((incident) => ({
@@ -104,65 +125,76 @@ export class DashboardService {
     };
   }
 
-  async servicesHealth(userId: string, projectId: string) {
+  async servicesHealth(userId: string, projectId: string, range: DashboardRange = '24h') {
     await this.access.assert(userId, projectId);
-    const [services, incidents] = await Promise.all([
-      this.prisma.service.findMany({
-        where: { projectId },
-        orderBy: { lastSeenAt: 'desc' },
-      }),
-      this.prisma.incident.findMany({
-        where: { projectId, status: { not: IncidentStatus.RESOLVED } },
-        select: { serviceId: true, severity: true },
-      }),
-    ]);
-    const incidentCounts = new Map<string, { open: number; critical: number }>();
-    for (const incident of incidents) {
-      const current = incidentCounts.get(incident.serviceId) ?? { open: 0, critical: 0 };
-      current.open += 1;
-      if (incident.severity === IncidentSeverity.CRITICAL) current.critical += 1;
-      incidentCounts.set(incident.serviceId, current);
-    }
-
-    return services.map((service) => {
-      const counts = incidentCounts.get(service.id) ?? { open: 0, critical: 0 };
-      return {
-        id: service.id,
-        name: service.name,
-        environment: service.environment,
-        sourceTypes: service.sourceTypes,
-        lastSeenAt: service.lastSeenAt,
-        logCount: service.logCount,
-        errorCount: service.errorCount,
-        openIncidentCount: counts.open,
-        criticalIncidentCount: counts.critical,
-        status: serviceHealthStatus({
-          lastSeenAt: service.lastSeenAt,
-          openIncidentCount: counts.open,
-          criticalIncidentCount: counts.critical,
-          errorCount: service.errorCount,
-        }),
-      };
-    });
+    return this.serviceHealthRows(projectId, dashboardWindow(range));
   }
 
-  async apiPerformance(userId: string, projectId: string) {
+  async serviceDetail(userId: string, projectId: string, serviceId: string, range: DashboardRange = '24h') {
     await this.access.assert(userId, projectId);
+    const service = await this.prisma.service.findFirst({ where: { id: serviceId, projectId } });
+    if (!service) throw new NotFoundException('Service not found');
+
+    const window = dashboardWindow(range);
+    const [healthRows, timeSeries, sourceRows, apiPerformance, recentIncidents, recentLogs] =
+      await Promise.all([
+        this.serviceHealthRows(projectId, window, serviceId),
+        this.timeSeries(projectId, window, serviceId),
+        this.rawLogModel.aggregate<{ _id: string; count: number }>([
+          {
+            $match: {
+              projectId,
+              serviceId,
+              timestamp: { $gte: window.from, $lt: window.to },
+            },
+          },
+          { $group: { _id: '$sourceType', count: { $sum: 1 } } },
+        ]),
+        this.apiPerformanceRows(projectId, window, 10, serviceId),
+        this.prisma.incident.findMany({
+          where: { projectId, serviceId },
+          include: { service: true },
+          orderBy: { lastSeenAt: 'desc' },
+          take: 5,
+        }),
+        this.rawLogModel
+          .find({
+            projectId,
+            serviceId,
+            timestamp: { $gte: window.from, $lt: window.to },
+          })
+          .sort({ timestamp: -1 })
+          .limit(10)
+          .lean(),
+      ]);
+
     return {
-      items: await this.apiPerformanceRows(projectId, await this.startOfToday(projectId), 20),
+      range: rangeResponse(window),
+      service: healthRows[0],
+      sourceCounts: Object.fromEntries(sourceRows.map((row) => [row._id, row.count])),
+      timeSeries,
+      apiPerformance,
+      recentIncidents,
+      recentLogs: recentLogs.map((log) => ({ ...log, id: String(log._id) })),
     };
   }
 
-  async frontendErrors(userId: string, projectId: string) {
+  async apiPerformance(userId: string, projectId: string, range: DashboardRange = '24h') {
     await this.access.assert(userId, projectId);
-    const today = await this.startOfToday(projectId);
+    const window = dashboardWindow(range);
+    return { range: rangeResponse(window), items: await this.apiPerformanceRows(projectId, window, 20) };
+  }
+
+  async frontendErrors(userId: string, projectId: string, range: DashboardRange = '24h') {
+    await this.access.assert(userId, projectId);
+    const window = dashboardWindow(range);
     const match = {
       projectId,
       sourceType: 'frontend',
       level: { $in: ['error', 'fatal'] },
-      timestamp: { $gte: today },
+      timestamp: { $gte: window.from, $lt: window.to },
     };
-    const [totalToday, byPage, recent] = await Promise.all([
+    const [total, byPage, recent] = await Promise.all([
       this.rawLogModel.countDocuments(match),
       this.rawLogModel.aggregate<FrontendPageError>([
         { $match: match },
@@ -174,7 +206,9 @@ export class DashboardService {
     ]);
 
     return {
-      totalToday,
+      range: rangeResponse(window),
+      total,
+      totalToday: total,
       byPage: byPage.map((row) => ({ pageUrl: row._id, count: row.count })),
       recent: recent.map((log) => ({
         id: String(log._id),
@@ -187,12 +221,179 @@ export class DashboardService {
     };
   }
 
-  private async topErrorServices(projectId: string, today: Date, limit: number) {
+  private async serviceHealthRows(projectId: string, window: Window, serviceId?: string) {
+    const serviceWhere = { projectId, ...(serviceId ? { id: serviceId } : {}) };
+    const logMatch = {
+      projectId,
+      ...(serviceId ? { serviceId } : {}),
+      timestamp: { $gte: window.from, $lt: window.to },
+    };
+    const [services, incidents, stats] = await Promise.all([
+      this.prisma.service.findMany({ where: serviceWhere, orderBy: { lastSeenAt: 'desc' } }),
+      this.prisma.incident.findMany({
+        where: {
+          projectId,
+          ...(serviceId ? { serviceId } : {}),
+          status: { not: IncidentStatus.RESOLVED },
+        },
+        select: { serviceId: true, severity: true },
+      }),
+      this.rawLogModel.aggregate<ServicePeriodStats>([
+        { $match: logMatch },
+        {
+          $group: {
+            _id: '$serviceId',
+            logCount: { $sum: 1 },
+            errorCount: {
+              $sum: { $cond: [{ $in: ['$level', ['error', 'fatal']] }, 1, 0] },
+            },
+          },
+        },
+      ]),
+    ]);
+    const incidentCounts = new Map<string, { open: number; critical: number }>();
+    for (const incident of incidents) {
+      const current = incidentCounts.get(incident.serviceId) ?? { open: 0, critical: 0 };
+      current.open += 1;
+      if (incident.severity === IncidentSeverity.CRITICAL) current.critical += 1;
+      incidentCounts.set(incident.serviceId, current);
+    }
+    const statsByService = new Map(stats.map((row) => [row._id, row]));
+
+    return services.map((service) => {
+      const counts = incidentCounts.get(service.id) ?? { open: 0, critical: 0 };
+      const period = statsByService.get(service.id) ?? { logCount: 0, errorCount: 0 };
+      const health = serviceHealth({
+        lastSeenAt: service.lastSeenAt,
+        openIncidentCount: counts.open,
+        criticalIncidentCount: counts.critical,
+        logCount: period.logCount,
+        errorCount: period.errorCount,
+      });
+
+      return {
+        ...service,
+        periodLogCount: period.logCount,
+        periodErrorCount: period.errorCount,
+        openIncidentCount: counts.open,
+        criticalIncidentCount: counts.critical,
+        ...health,
+      };
+    });
+  }
+
+  private async periodSourceCounts(projectId: string, window: Window) {
+    return this.rawLogModel.aggregate<PeriodSourceCount>([
+      {
+        $match: {
+          projectId,
+          timestamp: { $gte: window.previousFrom, $lt: window.to },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            period: { $cond: [{ $gte: ['$timestamp', window.from] }, 'current', 'previous'] },
+            sourceType: '$sourceType',
+          },
+          count: { $sum: 1 },
+          errorCount: {
+            $sum: { $cond: [{ $in: ['$level', ['error', 'fatal']] }, 1, 0] },
+          },
+        },
+      },
+    ]);
+  }
+
+  private sourceCounts(rows: PeriodSourceCount[]) {
+    const counts: Record<string, number> = {
+      docker: 0,
+      api: 0,
+      frontend: 0,
+      worker: 0,
+      manual: 0,
+    };
+    for (const row of rows) counts[row._id.sourceType] = row.count;
+    return counts;
+  }
+
+  private async timeSeries(projectId: string, window: Window, serviceId?: string) {
+    const [logs, incidents] = await Promise.all([
+      this.rawLogModel.aggregate<TimelineRow>([
+        {
+          $match: {
+            projectId,
+            ...(serviceId ? { serviceId } : {}),
+            timestamp: { $gte: window.from, $lt: window.to },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              $dateTrunc: {
+                date: '$timestamp',
+                unit: 'minute',
+                binSize: window.bucketMinutes,
+              },
+            },
+            logCount: { $sum: 1 },
+            errorCount: {
+              $sum: { $cond: [{ $in: ['$level', ['error', 'fatal']] }, 1, 0] },
+            },
+            avgApiDurationMs: {
+              $avg: {
+                $cond: [
+                  { $and: [{ $eq: ['$sourceType', 'api'] }, { $isNumber: '$api.durationMs' }] },
+                  '$api.durationMs',
+                  null,
+                ],
+              },
+            },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+      this.prisma.incident.findMany({
+        where: {
+          projectId,
+          ...(serviceId ? { serviceId } : {}),
+          createdAt: { gte: window.from, lt: window.to },
+        },
+        select: { createdAt: true },
+      }),
+    ]);
+    const bucketMs = window.bucketMinutes * 60_000;
+    const byBucket = new Map(logs.map((row) => [new Date(row._id).getTime(), row]));
+    const incidentsByBucket = new Map<number, number>();
+    for (const incident of incidents) {
+      const bucket = Math.floor(incident.createdAt.getTime() / bucketMs) * bucketMs;
+      incidentsByBucket.set(bucket, (incidentsByBucket.get(bucket) ?? 0) + 1);
+    }
+    const result = [];
+    const firstBucket = Math.floor(window.from.getTime() / bucketMs) * bucketMs;
+    for (let timestamp = firstBucket; timestamp < window.to.getTime(); timestamp += bucketMs) {
+      const row = byBucket.get(timestamp);
+      const logCount = row?.logCount ?? 0;
+      const errorCount = row?.errorCount ?? 0;
+      result.push({
+        timestamp: new Date(timestamp).toISOString(),
+        logCount,
+        logsPerMinute: Math.round((logCount / window.bucketMinutes) * 100) / 100,
+        errorCount,
+        errorRate: logCount ? Math.round((errorCount / logCount) * 1000) / 10 : 0,
+        incidentCount: incidentsByBucket.get(timestamp) ?? 0,
+        avgApiDurationMs: row?.avgApiDurationMs === undefined ? null : Math.round(row.avgApiDurationMs),
+      });
+    }
+    return result;
+  }
+
+  private async topErrorServices(projectId: string, window: Window, limit: number) {
     const rows = await this.rawLogModel.aggregate<TopErrorService>([
       {
         $match: {
           projectId,
-          timestamp: { $gte: today },
+          timestamp: { $gte: window.from, $lt: window.to },
           level: { $in: ['error', 'fatal'] },
         },
       },
@@ -213,13 +414,15 @@ export class DashboardService {
     }));
   }
 
-  private async apiPerformanceRows(projectId: string, today: Date, limit: number) {
-    const rows = await this.rawLogModel.aggregate<ApiPerformanceRow>([
+  private async apiPerformanceRows(projectId: string, window: Window, limit: number, serviceId?: string) {
+    // MongoDB 7 supports $percentile; Mongoose's pipeline type has not caught up yet.
+    const pipeline = [
       {
         $match: {
           projectId,
+          ...(serviceId ? { serviceId } : {}),
           sourceType: 'api',
-          timestamp: { $gte: today },
+          timestamp: { $gte: window.from, $lt: window.to },
           'api.durationMs': { $type: 'number' },
         },
       },
@@ -232,39 +435,45 @@ export class DashboardService {
           count: { $sum: 1 },
           avgDurationMs: { $avg: '$api.durationMs' },
           maxDurationMs: { $max: '$api.durationMs' },
-          errorCount: {
-            $sum: {
-              $cond: [{ $gte: ['$api.statusCode', 500] }, 1, 0],
+          percentiles: {
+            $percentile: {
+              input: '$api.durationMs',
+              p: [0.95, 0.99],
+              method: 'approximate',
             },
+          },
+          errorCount: {
+            $sum: { $cond: [{ $gte: ['$api.statusCode', 500] }, 1, 0] },
           },
         },
       },
       { $sort: { avgDurationMs: -1 } },
       { $limit: limit },
-    ]);
+    ] as unknown as PipelineStage[];
+    const rows = await this.rawLogModel.aggregate<ApiPerformanceRow>(pipeline);
 
     return rows.map((row) => ({
       path: row._id.path,
       method: row._id.method,
       count: row.count,
       avgDurationMs: Math.round(row.avgDurationMs),
+      p95DurationMs: Math.round(row.percentiles?.[0] ?? row.avgDurationMs),
+      p99DurationMs: Math.round(row.percentiles?.[1] ?? row.avgDurationMs),
       maxDurationMs: row.maxDurationMs,
       errorCount: row.errorCount,
     }));
   }
+}
 
-  /**
-   * Where "today" starts for this project.
-   *
-   * This used to be the API server's local midnight, which is the wrong instant for every
-   * team not colocated with the server.
-   */
-  private async startOfToday(projectId: string) {
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: { timezone: true },
-    });
+function sum(rows: PeriodSourceCount[], key: 'count' | 'errorCount') {
+  return rows.reduce((total, row) => total + row[key], 0);
+}
 
-    return startOfDayIn(project?.timezone ?? 'UTC');
-  }
+function rangeResponse(window: Window) {
+  return {
+    key: window.range,
+    from: window.from,
+    to: window.to,
+    bucketMinutes: window.bucketMinutes,
+  };
 }

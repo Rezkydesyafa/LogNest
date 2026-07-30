@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import Link from 'next/link';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { SearchIcon } from 'lucide-react';
+import { CopyIcon, ListFilterIcon, SearchIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import { api, formatDate, queryString } from '@/lib/api';
 import type { Log, Page, Service } from '@/lib/types';
+import { CodeBlock } from '@/components/code-block';
 import { PaginationControls } from '@/components/pagination-controls';
 import { ErrorState, PageHeader, PageLoading, ProjectRequired } from '@/components/page-state';
 import { useProject } from '@/components/project-context';
+import { rangeStart, useTimeRange } from '@/components/time-range-context';
 import { StatusBadge } from '@/components/status-badge';
 import { LiveIndicator } from '@/components/live-indicator';
 import { useProjectEvents } from '@/hooks/use-project-events';
@@ -36,29 +40,29 @@ type Filters = {
   to?: string;
   path?: string;
   statusCode?: string;
+  requestId?: string;
 };
 
 export default function LogsPage() {
   const { projectId, loading } = useProject();
+  const { range } = useTimeRange();
   const client = useQueryClient();
   const [live, setLive] = useState(true);
-  const initialService =
-    typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get('serviceId') ?? '');
-  const [filters, setFilters] = useState<Filters>({
-    serviceId: initialService,
-  });
+  const [filters, setFilters] = useState<Filters>(initialFilters);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Log>();
+  const defaultFrom = useMemo(() => rangeStart(range), [range]);
+  const effectiveFilters = filters.from ? filters : { ...filters, from: defaultFrom };
   const services = useQuery({
     queryKey: ['services', projectId],
     queryFn: () => api<Service[]>(`/projects/${projectId}/services`),
     enabled: Boolean(projectId),
   });
   const logs = useQuery({
-    queryKey: ['logs', projectId, filters, page],
+    queryKey: ['logs', projectId, effectiveFilters, page],
     queryFn: () =>
       api<Page<Log>>(
-        `/logs${queryString({ projectId, ...filters, statusCode: filters.statusCode ? Number(filters.statusCode) : undefined, page, limit: 25 })}`,
+        `/logs${queryString({ projectId, ...effectiveFilters, statusCode: effectiveFilters.statusCode ? Number(effectiveFilters.statusCode) : undefined, page, limit: 25 })}`,
       ),
     enabled: Boolean(projectId),
   });
@@ -76,7 +80,7 @@ export default function LogsPage() {
     <>
       <PageHeader
         title="Logs"
-        description="Search raw Docker, API, worker, manual, and frontend logs."
+        description={`Search logs received over the last ${range}, or set a custom range.`}
         action={
           <LiveIndicator
             live={live}
@@ -97,7 +101,11 @@ export default function LogsPage() {
                 Object.fromEntries(
                   Array.from(data.entries()).map(([key, value]) => [
                     key,
-                    value === 'all' ? '' : String(value),
+                    value === 'all'
+                      ? ''
+                      : ['from', 'to'].includes(key) && value
+                        ? new Date(String(value)).toISOString()
+                        : String(value),
                   ]),
                 ),
               );
@@ -134,7 +142,7 @@ export default function LogsPage() {
               </Field>
               <Field>
                 <FieldLabel>Source</FieldLabel>
-                <Select name="sourceType" defaultValue="all">
+                <Select name="sourceType" defaultValue={filters.sourceType || 'all'}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -151,7 +159,7 @@ export default function LogsPage() {
               </Field>
               <Field>
                 <FieldLabel>Level</FieldLabel>
-                <Select name="level" defaultValue="all">
+                <Select name="level" defaultValue={filters.level || 'all'}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -168,19 +176,50 @@ export default function LogsPage() {
               </Field>
               <Field>
                 <FieldLabel htmlFor="environment">Environment</FieldLabel>
-                <Input id="environment" name="environment" placeholder="production" />
+                <Input
+                  id="environment"
+                  name="environment"
+                  defaultValue={filters.environment}
+                  placeholder="production"
+                />
               </Field>
               <Field>
                 <FieldLabel htmlFor="path">API path</FieldLabel>
-                <Input id="path" name="path" placeholder="/checkout" />
+                <Input id="path" name="path" defaultValue={filters.path} placeholder="/checkout" />
               </Field>
               <Field>
                 <FieldLabel htmlFor="statusCode">Status code</FieldLabel>
-                <Input id="statusCode" name="statusCode" type="number" min="100" max="599" />
+                <Input
+                  id="statusCode"
+                  name="statusCode"
+                  type="number"
+                  min="100"
+                  max="599"
+                  defaultValue={filters.statusCode}
+                />
               </Field>
               <Field>
                 <FieldLabel htmlFor="from">From</FieldLabel>
-                <Input id="from" name="from" type="datetime-local" />
+                <Input
+                  key={defaultFrom}
+                  id="from"
+                  name="from"
+                  type="datetime-local"
+                  defaultValue={toLocalInput(filters.from ?? defaultFrom)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="to">To</FieldLabel>
+                <Input id="to" name="to" type="datetime-local" defaultValue={toLocalInput(filters.to)} />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="requestId">Request ID</FieldLabel>
+                <Input
+                  id="requestId"
+                  name="requestId"
+                  defaultValue={filters.requestId}
+                  placeholder="req_..."
+                />
               </Field>
             </FieldGroup>
             <div>
@@ -254,20 +293,42 @@ export default function LogsPage() {
               </div>
               <section>
                 <h3 className="mb-1 text-sm font-medium">Message</h3>
-                <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">{selected.message}</pre>
+                <CodeBlock code={selected.message} label="message" />
               </section>
               {selected.stackTrace && (
                 <section>
                   <h3 className="mb-1 text-sm font-medium">Stack trace</h3>
-                  <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
-                    {selected.stackTrace}
-                  </pre>
+                  <CodeBlock code={selected.stackTrace} label="stack trace" />
+                </section>
+              )}
+              {selected.requestId && (
+                <section>
+                  <h3 className="mb-2 text-sm font-medium">Request ID</h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <code className="rounded-md bg-muted px-3 py-2 text-xs">{selected.requestId}</code>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      title="Copy request ID"
+                      onClick={() => void copyText(selected.requestId!, 'Request ID copied')}
+                    >
+                      <CopyIcon />
+                      <span className="sr-only">Copy request ID</span>
+                    </Button>
+                    <Button size="sm" variant="outline" asChild>
+                      <Link href={`/logs${queryString({ requestId: selected.requestId })}`}>
+                        <ListFilterIcon data-icon="inline-start" />
+                        Related logs
+                      </Link>
+                    </Button>
+                  </div>
                 </section>
               )}
               <section>
                 <h3 className="mb-1 text-sm font-medium">Payload</h3>
-                <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
-                  {JSON.stringify(
+                <CodeBlock
+                  label="payload"
+                  code={JSON.stringify(
                     {
                       requestId: selected.requestId,
                       api: selected.api,
@@ -277,7 +338,7 @@ export default function LogsPage() {
                     null,
                     2,
                   )}
-                </pre>
+                />
               </section>
             </div>
           )}
@@ -285,4 +346,38 @@ export default function LogsPage() {
       </Sheet>
     </>
   );
+}
+
+function initialFilters(): Filters {
+  if (typeof window === 'undefined') return {};
+  const params = new URLSearchParams(window.location.search);
+  return Object.fromEntries(
+    [
+      'keyword',
+      'sourceType',
+      'level',
+      'environment',
+      'serviceId',
+      'from',
+      'to',
+      'path',
+      'statusCode',
+      'requestId',
+    ]
+      .map((key) => [key, params.get(key) ?? ''])
+      .filter(([, value]) => value),
+  );
+}
+
+function toLocalInput(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+async function copyText(value: string, message: string) {
+  await navigator.clipboard.writeText(value);
+  toast.success(message);
 }

@@ -5,6 +5,7 @@ export type AgentConfig = {
   selfContainerId?: string;
   composeProjects: string[];
   composeServices: string[];
+  excludedComposeProjects: string[];
   defaultEnvironment: string;
   retryAttempts: number;
   retryDelayMs: number;
@@ -23,6 +24,10 @@ export function loadConfig(env = process.env): AgentConfig {
     selfContainerId: env.LOGMIND_AGENT_CONTAINER_ID,
     composeProjects: list(env.LOGMIND_COMPOSE_PROJECTS),
     composeServices: list(env.LOGMIND_COMPOSE_SERVICES),
+    excludedComposeProjects:
+      env.LOGMIND_EXCLUDE_COMPOSE_PROJECTS === undefined
+        ? ['logmind']
+        : list(env.LOGMIND_EXCLUDE_COMPOSE_PROJECTS),
     defaultEnvironment: env.LOGMIND_DEFAULT_ENVIRONMENT || 'development',
     retryAttempts: positiveNumber(env.LOGMIND_AGENT_RETRY_ATTEMPTS, 3),
     retryDelayMs: positiveNumber(env.LOGMIND_AGENT_RETRY_DELAY_MS, 1000),

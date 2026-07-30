@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, formatDate, queryString } from '@/lib/api';
 import type { Service } from '@/lib/types';
 import { useProject } from '@/components/project-context';
+import { useTimeRange } from '@/components/time-range-context';
 import { ErrorState, PageHeader, PageLoading, ProjectRequired } from '@/components/page-state';
 import { StatusBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
@@ -13,9 +14,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 export default function ServicesPage() {
   const { projectId, loading } = useProject();
+  const { range } = useTimeRange();
   const query = useQuery({
-    queryKey: ['dashboard', 'health', projectId],
-    queryFn: () => api<Service[]>(`/dashboard/services-health${queryString({ projectId })}`),
+    queryKey: ['dashboard', 'health', projectId, range],
+    queryFn: () => api<Service[]>(`/dashboard/services-health${queryString({ projectId, range })}`),
     enabled: Boolean(projectId),
     refetchInterval: 30_000,
   });
@@ -24,7 +26,10 @@ export default function ServicesPage() {
   if (query.error) return <ErrorState error={query.error} />;
   return (
     <>
-      <PageHeader title="Services" description="Auto-registered services and their current health." />
+      <PageHeader
+        title="Services"
+        description={`Auto-registered services and health over the last ${range}.`}
+      />
       <Card>
         <CardContent>
           <div className="overflow-x-auto">
@@ -36,6 +41,7 @@ export default function ServicesPage() {
                   <TableHead>Sources</TableHead>
                   <TableHead className="text-right">Logs</TableHead>
                   <TableHead className="text-right">Errors</TableHead>
+                  <TableHead className="text-right">Error rate</TableHead>
                   <TableHead className="text-right">Incidents</TableHead>
                   <TableHead>Last seen</TableHead>
                 </TableRow>
@@ -44,10 +50,12 @@ export default function ServicesPage() {
                 {(query.data ?? []).map((service) => (
                   <TableRow key={service.id}>
                     <TableCell>
-                      <Link className="font-medium hover:underline" href={`/logs?serviceId=${service.id}`}>
+                      <Link className="font-medium hover:underline" href={`/services/${service.id}`}>
                         {service.name}
                       </Link>
-                      <div className="text-xs text-muted-foreground">{service.environment}</div>
+                      <div className="max-w-72 truncate text-xs text-muted-foreground">
+                        {service.environment} · {service.reason}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <StatusBadge value={service.status} />
@@ -61,8 +69,9 @@ export default function ServicesPage() {
                         ))}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{service.logCount}</TableCell>
-                    <TableCell className="text-right tabular-nums">{service.errorCount}</TableCell>
+                    <TableCell className="text-right tabular-nums">{service.periodLogCount}</TableCell>
+                    <TableCell className="text-right tabular-nums">{service.periodErrorCount}</TableCell>
+                    <TableCell className="text-right tabular-nums">{service.errorRate ?? 0}%</TableCell>
                     <TableCell className="text-right tabular-nums">{service.openIncidentCount}</TableCell>
                     <TableCell className="whitespace-nowrap">{formatDate(service.lastSeenAt)}</TableCell>
                   </TableRow>

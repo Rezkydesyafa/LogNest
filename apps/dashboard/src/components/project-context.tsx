@@ -90,7 +90,7 @@ export function ProjectPicker() {
     <div className="flex min-w-0 items-center gap-2">
       {projects.length > 0 && (
         <Select value={projectId} onValueChange={setProjectId}>
-          <SelectTrigger aria-label="Active project" className="w-44 sm:w-56">
+          <SelectTrigger aria-label="Active project" className="w-32 sm:w-56">
             <SelectValue placeholder="Select project" />
           </SelectTrigger>
           <SelectContent>

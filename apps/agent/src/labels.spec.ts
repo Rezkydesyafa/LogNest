@@ -59,6 +59,16 @@ describe('shouldWatchContainer', () => {
   it('ignores unlabelled containers with no allowlist match', () => {
     expect(shouldWatchContainer({}, ['docker'], ['backend'])).toBe(false);
   });
+
+  it('watches every container with wildcard discovery except excluded projects', () => {
+    expect(shouldWatchContainer({}, ['*'], [], ['logmind'])).toBe(true);
+    expect(shouldWatchContainer({ 'com.docker.compose.project': 'sakoo' }, ['*'], [], ['logmind'])).toBe(
+      true,
+    );
+    expect(shouldWatchContainer({ 'com.docker.compose.project': 'logmind' }, ['*'], [], ['logmind'])).toBe(
+      false,
+    );
+  });
 });
 
 describe('isAgentContainer', () => {

@@ -137,6 +137,14 @@ export class IncidentsService {
       ...(query.serviceId ? { serviceId: query.serviceId } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.severity ? { severity: query.severity } : {}),
+      ...(query.from || query.to
+        ? {
+            lastSeenAt: {
+              ...(query.from ? { gte: new Date(query.from) } : {}),
+              ...(query.to ? { lte: new Date(query.to) } : {}),
+            },
+          }
+        : {}),
     };
   }
 }

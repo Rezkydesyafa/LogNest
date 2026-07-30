@@ -11,6 +11,7 @@ const RULES: Array<[string, RegExp]> = [
   ['PATCH', /^\/incidents\/[^/]+\/status$/],
   ['POST', /^\/incidents\/[^/]+\/analyze$/],
   ['GET', /^\/dashboard\/(?:summary|services-health|api-performance|frontend-errors)$/],
+  ['GET', /^\/dashboard\/services\/[^/]+$/],
   ['GET', /^\/projects\/[^/]+\/(?:alert-channels|alert-rules|alert-deliveries)$/],
   ['POST', /^\/projects\/[^/]+\/(?:alert-channels|alert-rules)$/],
   ['PATCH', /^\/alert-(?:channels|rules)\/[^/]+$/],

@@ -303,13 +303,17 @@ labels:
 
 Mount `/var/run/docker.sock` when running the agent as a container.
 
-To discover Compose services without adding labels, configure allowlists on the agent:
+To discover every running container on the Docker host without modifying monitored projects:
 
 ```env
-LOGMIND_COMPOSE_PROJECTS=docker
-LOGMIND_COMPOSE_SERVICES=backend,celery_worker
+LOGMIND_COMPOSE_PROJECTS=*
+LOGMIND_COMPOSE_SERVICES=
+LOGMIND_EXCLUDE_COMPOSE_PROJECTS=logmind
 LOGMIND_DEFAULT_ENVIRONMENT=production
 ```
+
+The default exclusion prevents LogMind from collecting its own platform logs. Replace `*`
+with a comma-separated Compose project allow-list when only selected projects should be monitored.
 
 Explicit `logmind.enabled=false` always opts a container out. Python tracebacks are grouped into one log with the full stack trace.
 
