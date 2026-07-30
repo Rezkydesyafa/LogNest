@@ -19,6 +19,10 @@ export type Service = {
   lastSeenAt: string;
   logCount: number;
   errorCount: number;
+  periodLogCount?: number;
+  periodErrorCount?: number;
+  errorRate?: number;
+  reason?: string;
   openIncidentCount?: number;
   criticalIncidentCount?: number;
   status?: 'healthy' | 'warning' | 'critical' | 'stale';
@@ -81,31 +85,71 @@ export type Page<T> = {
   limit: number;
   total: number;
 };
+export type DashboardRange = '15m' | '1h' | '6h' | '24h' | '7d';
+export type DashboardRangeInfo = {
+  key: DashboardRange;
+  from: string;
+  to: string;
+  bucketMinutes: number;
+};
+export type DashboardTimePoint = {
+  timestamp: string;
+  logCount: number;
+  logsPerMinute: number;
+  errorCount: number;
+  errorRate: number;
+  incidentCount: number;
+  avgApiDurationMs: number | null;
+};
+export type ApiPerformanceEndpoint = {
+  path: string;
+  method: string;
+  count: number;
+  avgDurationMs: number;
+  p95DurationMs: number;
+  p99DurationMs: number;
+  maxDurationMs: number;
+  errorCount: number;
+};
 export type DashboardSummary = {
+  range: DashboardRangeInfo;
   totalServices: number;
-  totalLogsToday: number;
-  dockerLogsToday: number;
-  apiLogsToday: number;
-  frontendLogsToday: number;
-  errorLogsToday: number;
+  totalLogs: number;
+  dockerLogs: number;
+  apiLogs: number;
+  frontendLogs: number;
+  workerLogs: number;
+  manualLogs: number;
+  errorLogs: number;
   openIncidents: number;
   criticalIncidents: number;
+  sourceCounts: Record<string, number>;
+  trends: {
+    totalLogs: number | null;
+    errorLogs: number | null;
+    incidents: number | null;
+  };
+  timeSeries: DashboardTimePoint[];
   topErrorServices: Array<{
     serviceId: string;
     serviceName: string;
     errorCount: number;
   }>;
-  slowestApiEndpoints: Array<{
-    path: string;
-    method: string;
-    avgDurationMs: number;
-    errorCount: number;
-  }>;
+  slowestApiEndpoints: ApiPerformanceEndpoint[];
   recentIncidents: Array<
     Pick<Incident, 'id' | 'title' | 'severity' | 'status' | 'lastSeenAt'> & {
       serviceName: string;
     }
   >;
+};
+export type ServiceDetail = {
+  range: DashboardRangeInfo;
+  service: Service;
+  sourceCounts: Record<string, number>;
+  timeSeries: DashboardTimePoint[];
+  apiPerformance: ApiPerformanceEndpoint[];
+  recentIncidents: Incident[];
+  recentLogs: Log[];
 };
 
 export type AlertChannel = {

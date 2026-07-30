@@ -1,14 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FilterIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckIcon, CircleCheckBigIcon, FilterIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import { api, formatDate, queryString } from '@/lib/api';
 import type { Incident, Page, Service } from '@/lib/types';
+import { deniedReason } from '@/lib/permissions';
 import { PaginationControls } from '@/components/pagination-controls';
 import { ErrorState, PageHeader, PageLoading, ProjectRequired } from '@/components/page-state';
 import { useProject } from '@/components/project-context';
+import { rangeStart, useTimeRange } from '@/components/time-range-context';
 import { StatusBadge } from '@/components/status-badge';
 import { LiveIndicator } from '@/components/live-indicator';
 import { useProjectEvents } from '@/hooks/use-project-events';
@@ -26,20 +29,36 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function IncidentsPage() {
-  const { projectId, loading } = useProject();
+  const { projectId, loading, can } = useProject();
+  const { range } = useTimeRange();
   const client = useQueryClient();
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(initialFilters);
   const [page, setPage] = useState(1);
+  const defaultFrom = useMemo(() => rangeStart(range), [range]);
+  const effectiveFilters = filters.from ? filters : { ...filters, from: defaultFrom };
   const services = useQuery({
     queryKey: ['services', projectId],
     queryFn: () => api<Service[]>(`/projects/${projectId}/services`),
     enabled: Boolean(projectId),
   });
   const incidents = useQuery({
-    queryKey: ['incidents', projectId, filters, page],
+    queryKey: ['incidents', projectId, effectiveFilters, page],
     queryFn: () =>
-      api<Page<Incident>>(`/incidents${queryString({ projectId, ...filters, page, limit: 25 })}`),
+      api<Page<Incident>>(`/incidents${queryString({ projectId, ...effectiveFilters, page, limit: 25 })}`),
     enabled: Boolean(projectId),
+  });
+  const status = useMutation({
+    mutationFn: ({ id, value }: { id: string; value: Incident['status'] }) =>
+      api(`/incidents/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: value }),
+      }),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ['incidents', projectId] });
+      await client.invalidateQueries({ queryKey: ['dashboard', 'summary', projectId] });
+      toast.success('Incident status updated');
+    },
+    onError: (error) => toast.error(error.message),
   });
   // Live feed: the worker publishes on every detection, so the table refreshes itself
   // instead of the operator hitting reload during an outage.
@@ -53,7 +72,7 @@ export default function IncidentsPage() {
     <>
       <PageHeader
         title="Incidents"
-        description="Fingerprint groups created from repeated error patterns."
+        description={`Fingerprint groups active within the last ${range}.`}
         action={<LiveIndicator live connected={connected} />}
       />
       <Card className="mb-5">
@@ -77,7 +96,7 @@ export default function IncidentsPage() {
             <FieldGroup className="grid gap-4 sm:grid-cols-3">
               <Field>
                 <FieldLabel>Status</FieldLabel>
-                <Select name="status" defaultValue="all">
+                <Select name="status" defaultValue={filters.status || 'all'}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -94,7 +113,7 @@ export default function IncidentsPage() {
               </Field>
               <Field>
                 <FieldLabel>Severity</FieldLabel>
-                <Select name="severity" defaultValue="all">
+                <Select name="severity" defaultValue={filters.severity || 'all'}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -111,7 +130,7 @@ export default function IncidentsPage() {
               </Field>
               <Field>
                 <FieldLabel>Service</FieldLabel>
-                <Select name="serviceId" defaultValue="all">
+                <Select name="serviceId" defaultValue={filters.serviceId || 'all'}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -149,6 +168,7 @@ export default function IncidentsPage() {
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Occurrences</TableHead>
                   <TableHead>Last seen</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -168,6 +188,42 @@ export default function IncidentsPage() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{incident.occurrenceCount}</TableCell>
                     <TableCell className="whitespace-nowrap">{formatDate(incident.lastSeenAt)}</TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        {incident.status === 'OPEN' && (
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            title={
+                              can('changeIncidentStatus')
+                                ? 'Acknowledge incident'
+                                : deniedReason('changeIncidentStatus')
+                            }
+                            disabled={!can('changeIncidentStatus') || status.isPending}
+                            onClick={() => status.mutate({ id: incident.id, value: 'ACKNOWLEDGED' })}
+                          >
+                            <CheckIcon />
+                            <span className="sr-only">Acknowledge incident</span>
+                          </Button>
+                        )}
+                        {incident.status !== 'RESOLVED' && (
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            title={
+                              can('changeIncidentStatus')
+                                ? 'Resolve incident'
+                                : deniedReason('changeIncidentStatus')
+                            }
+                            disabled={!can('changeIncidentStatus') || status.isPending}
+                            onClick={() => status.mutate({ id: incident.id, value: 'RESOLVED' })}
+                          >
+                            <CircleCheckBigIcon />
+                            <span className="sr-only">Resolve incident</span>
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -189,5 +245,15 @@ export default function IncidentsPage() {
         </CardContent>
       </Card>
     </>
+  );
+}
+
+function initialFilters() {
+  if (typeof window === 'undefined') return {};
+  const params = new URLSearchParams(window.location.search);
+  return Object.fromEntries(
+    ['status', 'severity', 'serviceId']
+      .map((key) => [key, params.get(key) ?? ''])
+      .filter(([, value]) => value),
   );
 }

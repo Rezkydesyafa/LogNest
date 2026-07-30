@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsISO8601, IsOptional, IsString, Max, Min } from 'class-validator';
 import { IncidentSeverity, IncidentStatus } from '@prisma/client';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -23,6 +23,16 @@ export class FindIncidentsQueryDto {
   @IsOptional()
   @IsEnum(IncidentSeverity)
   severity?: IncidentSeverity;
+
+  @ApiPropertyOptional({ example: '2026-07-30T00:00:00.000Z' })
+  @IsOptional()
+  @IsISO8601()
+  from?: string;
+
+  @ApiPropertyOptional({ example: '2026-07-31T00:00:00.000Z' })
+  @IsOptional()
+  @IsISO8601()
+  to?: string;
 
   @ApiPropertyOptional({ example: 1, minimum: 1 })
   @IsOptional()
