@@ -60,7 +60,12 @@ export class ContainerWatcher {
       const labels = details.Config?.Labels ?? {};
 
       if (
-        !shouldWatchContainer(labels, this.config.composeProjects, this.config.composeServices) ||
+        !shouldWatchContainer(
+          labels,
+          this.config.composeProjects,
+          this.config.composeServices,
+          this.config.excludedComposeProjects,
+        ) ||
         isAgentContainer(details.Id, labels, this.config.selfContainerId)
       ) {
         return;

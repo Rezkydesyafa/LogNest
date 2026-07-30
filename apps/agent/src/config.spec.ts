@@ -11,6 +11,7 @@ describe('loadConfig', () => {
       bulkEndpoint: 'http://localhost:3000/logs/ingest/bulk',
       composeProjects: [],
       composeServices: [],
+      excludedComposeProjects: ['logmind'],
       defaultEnvironment: 'development',
       retryAttempts: 3,
       retryDelayMs: 1000,
@@ -42,10 +43,12 @@ describe('loadConfig', () => {
     const config = loadConfig({
       LOGMIND_COMPOSE_PROJECTS: 'docker, other ,',
       LOGMIND_COMPOSE_SERVICES: 'backend,celery_worker',
+      LOGMIND_EXCLUDE_COMPOSE_PROJECTS: 'logmind, monitoring',
     });
 
     expect(config.composeProjects).toEqual(['docker', 'other']);
     expect(config.composeServices).toEqual(['backend', 'celery_worker']);
+    expect(config.excludedComposeProjects).toEqual(['logmind', 'monitoring']);
   });
 
   it('falls back on invalid numeric values', () => {

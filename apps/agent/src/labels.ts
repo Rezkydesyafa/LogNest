@@ -8,15 +8,19 @@ export function shouldWatchContainer(
   labels: ContainerLabels,
   composeProjects: string[],
   composeServices: string[],
+  excludedComposeProjects: string[] = [],
 ) {
   if (labels['logmind.enabled'] === 'false') return false;
   if (isLogmindEnabled(labels)) return true;
 
   const project = labels['com.docker.compose.project'];
   const service = labels['com.docker.compose.service'];
+  const watchesAllProjects = composeProjects.includes('*');
+
+  if (watchesAllProjects && project && excludedComposeProjects.includes(project)) return false;
+
   return Boolean(
-    project &&
-    composeProjects.includes(project) &&
+    (watchesAllProjects || (project && composeProjects.includes(project))) &&
     (!composeServices.length || Boolean(service && composeServices.includes(service))),
   );
 }
